@@ -1,0 +1,49 @@
+object Form1: TForm1
+  Left = 293
+  Height = 519
+  Top = 165
+  Width = 608
+  Caption = 'Form1'
+  ClientHeight = 519
+  ClientWidth = 608
+  LCLVersion = '0.9.29'
+  object Memo1: TMemo
+    Left = 12
+    Height = 342
+    Top = 8
+    Width = 510
+    Lines.Strings = (
+      'excel = CreateActiveXObject( "Excel.Application" )'
+      'excel.visible = true'
+      'MyUtils.sleep(3000)'
+      'book = excel.workbooks.Add()'
+      'sheet = book.Worksheets(1)'
+      'sheet.Range("A1").value2 = "ABC"'
+      'MyUtils.sleep(3000)'
+      'MyUtils.SHowMessage(''Done.'')'
+      'book.Close(false)'
+      'excel.Quit()'
+    )
+    ScrollBars = ssAutoBoth
+    TabOrder = 0
+    WordWrap = False
+  end
+  object Button1: TButton
+    Left = 528
+    Height = 25
+    Top = 10
+    Width = 75
+    Caption = 'RUN'
+    OnClick = Button1Click
+    TabOrder = 1
+  end
+  object Memo2: TMemo
+    Left = 12
+    Height = 154
+    Top = 360
+    Width = 510
+    ScrollBars = ssAutoBoth
+    TabOrder = 2
+    WordWrap = False
+  end
+end
