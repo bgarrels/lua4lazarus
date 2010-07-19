@@ -78,7 +78,7 @@ begin
   param.rgdispidNamedArgs := nil;
   param.cArgs := 0;
   param.cNamedArgs := 0;
-  VariantInit(TVarData(ret));
+  VariantInit(TVarData({%H-}ret));
   ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
    DISPATCH_PROPERTYGET, param, @ret, nil, nil), key);
   case VarType(ret) of
@@ -114,7 +114,7 @@ begin
   ws:= UTF8Decode(key);
   ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
   case lua_type(L, 3) of
-    LUA_TNIL: VariantInit(TVarData(v));
+    LUA_TNIL: VariantInit(TVarData({%H-}v));
     LUA_TBOOLEAN: v := lua_toboolean(L, 3);
     LUA_TNUMBER: v := lua_tonumber(L, 3);
     else v := lua_tostring(L, 3);
@@ -156,7 +156,7 @@ begin
     // 逆順で
     pp := arglist;
     for i := c downto t+1 do begin
-      VariantInit(TVarData(v));
+      VariantInit(TVarData({%H-}v));
       case lua_type(L, i) of
         LUA_TBOOLEAN: v := lua_toboolean(L, i);
         LUA_TNUMBER: v := lua_tonumber(L, i);
@@ -170,7 +170,7 @@ begin
     param.rgvarg := arglist;
     param.rgdispidNamedArgs := nil;
     param.cNamedArgs := 0;
-    VariantInit(TVarData(ret));
+    VariantInit(TVarData({%H-}ret));
 
     ChkErr(L, id.Invoke(
      di,
@@ -221,13 +221,13 @@ begin
   lua_pushinteger(L, i);
   lua_rawset(L, 1);
 
-  VariantInit(TVarData(v));
+  VariantInit(TVarData({%H-}v));
   v := i;
   param.cArgs := 1;
   param.rgvarg := @v;
   param.rgdispidNamedArgs := nil;
   param.cNamedArgs := 0;
-  VariantInit(TVarData(ret));
+  VariantInit(TVarData({%H-}ret));
 
   if id.Invoke(
    DISPID_VALUE,
