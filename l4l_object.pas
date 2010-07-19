@@ -34,7 +34,7 @@ type
     FLS: Plua_State;
   protected
     property LS: Plua_State read FLS;
-    function Iterator(index: integer): integer; virtual;
+    function Iterator({%H-}index: integer): integer; virtual;
   public
     constructor Create(L : Plua_State); virtual;
   published
@@ -47,7 +47,7 @@ function l4l_toobject(L : Plua_State;  n: Integer): TLuaObject;
 
 implementation
 uses
-  typinfo;
+  typinfo, lauxlib;
 
 const
   FIELD_OBJ = '___l4lObject___';
@@ -61,7 +61,7 @@ var
   p: PPointer;
 begin
   p:= lua_touserdata(L, 1);
-  TLuaObject(p^).Free;
+  try TLuaObject(p^).Free; except end;
   Result:= 0;
 end;
 
@@ -81,7 +81,11 @@ begin
   lua_remove(L, -1);
   TMethod(method).Data := obj;
   TMethod(method).Code := p^;
-  Result := method();
+  try
+    Result := method();
+  except
+    on E: Exception do luaL_error(L, PChar(E.Message), []);
+  end;
 end;
 
 function Index(L : Plua_State) : Integer; cdecl;
@@ -99,14 +103,13 @@ begin
   key := lua_tostring(L, 2);
   if Assigned(obj.MethodAddress(PROP_HEAD + key)) then begin
     lua_getfield(L, 1, PChar(LowerCase(key)));
-    Result:= 1;
   end else begin
     try
       pi := FindPropInfo(obj, PROP_HEAD + key);
     except
-      pi := nil;
+      luaL_error(L, 'Unknown property: "%s".', [PChar(key)]);
     end;
-    if Assigned(pi) then begin
+    try
       case pi^.PropType^.Kind of
         tkInteger, tkQWord:
           lua_pushinteger(L, GetOrdProp(obj, pi));
@@ -130,9 +133,11 @@ begin
           lua_pushstring(L, PChar(GetStrProp(obj, pi)));
         end;
       end;
-      Result := 1;
+    except
+      on E: Exception do luaL_error(L, PChar(E.Message), []);
     end;
   end;
+  Result := 1;
 end;
 
 function NewIndex(L : Plua_State) : Integer; cdecl;
@@ -150,9 +155,9 @@ begin
   try
     pi := FindPropInfo(obj, PROP_HEAD + key);
   except
-    pi := nil;
+    luaL_error(L, 'Unknown property: "%s".', [PChar(key)]);
   end;
-  if Assigned(pi) then begin
+  try
     case pi^.PropType^.Kind of
       tkInteger, tkInt64, tkQWord:
         SetOrdProp(obj, pi, lua_tointeger(L, 3));
@@ -170,6 +175,8 @@ begin
         SetUnicodeStrProp(obj, pi, lua_tostring(L, 3));
       end;
     end;
+  except
+    on E: Exception do luaL_error(L, PChar(E.Message), []);
   end;
 end;
 
@@ -192,7 +199,11 @@ begin
   lua_pushstring(L, FIELD_IC);
   lua_pushinteger(L, i);
   lua_rawset(L, 1);
-  Result := obj.Iterator(i);
+  try
+    Result := obj.Iterator(i);
+  except
+    on E: Exception do luaL_error(L, PChar(E.Message), []);
+  end;
 end;
 
 procedure PushLuaObject(obj: TLuaObject);
@@ -227,7 +238,7 @@ begin
 
   cl:= obj.ClassType;
   while Assigned(cl) do begin
-    p := Pointer(Integer(cl) + vmtMethodtable);
+    p := {%H-}Pointer(Integer(cl) + vmtMethodtable);
     mt := p^;
     if Assigned(mt) then begin
       for i:=0 to mt^.count-1 do begin

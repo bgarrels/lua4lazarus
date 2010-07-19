@@ -69,6 +69,7 @@ var
 begin
   ws := UTF8Decode(lua_tostring(LS, 1));
   lua_pushlstring(LS, PChar(ws), Length(ws) shl 1);
+  Result := 1;
 end;
 
 function TLuaMyUtilsObject.l4l_WideToUtf8: integer;
@@ -81,6 +82,7 @@ begin
   SetLength(ws, l shr 1);
   Strlcopy(PChar(ws), p, l);
   lua_pushstring(LS, PChar(UTF8Encode(ws)));
+  Result := 1;
 end;
 
 function TLuaMyUtilsObject.l4l_Utf8ToAnsi: integer;

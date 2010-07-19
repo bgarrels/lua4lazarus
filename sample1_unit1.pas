@@ -82,7 +82,7 @@ begin
   Result := 0;
 end;
 
-function Alloc(ud, ptr: Pointer; osize, nsize: size_t) : Pointer; cdecl;
+function Alloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t) : Pointer; cdecl;
 begin
   try
     Result:= ptr;
