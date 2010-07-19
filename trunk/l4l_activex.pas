@@ -3,7 +3,8 @@
 
     ActiveXObject
 
-    License: BSD
+    License: New BSD
+      Copyright(c)2010- Malcome@Japan All rights reserved.
 
     Note:
        The property name is case insensitive, but
@@ -18,6 +19,9 @@
 
     Version History:
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
+
+    License for Lua 5.0 and later versions:
+      Copyright(c)1994–2008 Lua.org, PUC-Rio.
 }
 unit l4l_activex;
 
