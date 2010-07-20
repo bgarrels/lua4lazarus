@@ -58,6 +58,7 @@ type
 
   { TLuaPrintObject }
 
+  TLuaPenObject = class;
   TLuaBrushObject = class;
 
   TLuaPrintObject  = class(TLuaObject)
@@ -69,6 +70,7 @@ type
     function GetPageHeight: integer;
     function GetPageNumber: integer;
     function GetPageWidth: integer;
+    function GetPenObject: TLuaPenObject;
     function LP2DP(lp: integer): integer;
   protected
   public
@@ -84,7 +86,26 @@ type
     property l4l_pageHeight: integer read GetPageHeight;
     property l4l_pageNumber: integer read GetPageNumber;
     property l4l_units: char read FUnits write FUnits;
+    property l4l_Pen: TLuaPenObject read GetPenObject;
     property l4l_Brush: TLuaBrushObject read GetBrushObject;
+  end;
+
+  { TLuaPenObject }
+
+  TLuaPenObject  = class(TLuaObject)
+  private
+    LuaPrint: TLuaPrint;
+    function GetColor: string;
+    function GetStyle: string;
+    procedure SetColor(const AValue: string);
+    procedure SetStyle(const AValue: string);
+  protected
+  public
+    constructor Create(L : Plua_State; lp: TLuaPrint); overload;
+    destructor Destroy; override;
+  published
+    property l4l_color: string read GetColor write SetColor;
+    property l4l_style: string read GetStyle write SetStyle;
   end;
 
   { TLuaBrushObject }
@@ -92,13 +113,16 @@ type
   TLuaBrushObject  = class(TLuaObject)
   private
     LuaPrint: TLuaPrint;
+    function GetColor: string;
     function GetStyle: string;
+    procedure SetColor(const AValue: string);
     procedure SetStyle(const AValue: string);
   protected
   public
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
   published
+    property l4l_color: string read GetColor write SetColor;
     property l4l_style: string read GetStyle write SetStyle;
   end;
 
@@ -119,6 +143,9 @@ type
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
     function l4l_DrawImage: integer;
+    function l4l_pen_color: integer;
+    function l4l_pen_style: integer;
+    function l4l_brush_color: integer;
     function l4l_brush_style: integer;
   end;
 
@@ -382,6 +409,11 @@ begin
   Result := TLuaBrushObject.Create(LS, LuaPrint);
 end;
 
+function TLuaPrintObject.GetPenObject: TLuaPenObject;
+begin
+  Result := TLuaPenObject.Create(LS, LuaPrint);
+end;
+
 function TLuaPrintObject.GetPageHeight: integer;
 begin
   Result := DP2LP(LuaPrint.PageSize.cy);
@@ -477,6 +509,63 @@ begin
   Result := 0;
 end;
 
+{ TLuaPenObject }
+
+function TLuaPenObject.GetStyle: string;
+begin
+  Result := GetEnumName(TypeInfo(TPenStyle),
+   Integer(LuaPrint.FCanvas.Pen.Style));
+end;
+
+function TLuaPenObject.GetColor: string;
+begin
+  Result := GetEnumName(TypeInfo(TColor),
+   Integer(LuaPrint.FCanvas.Pen.Color));
+end;
+
+procedure TLuaPenObject.SetColor(const AValue: string);
+var
+  i: integer;
+begin
+  try
+    i := StrToInt(AValue);
+  except
+    i := StringToColor(AValue);
+  end;
+  if i >= 0 then begin
+    LuaPrint.FCanvas.Pen.Color := TColor(i);
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.pen_color(%d)', [i]));
+  end;
+end;
+
+procedure TLuaPenObject.SetStyle(const AValue: string);
+var
+  i: integer;
+begin
+  try
+    i := StrToInt(AValue);
+  except
+    i := GetEnumValue(TypeInfo(TPenStyle), AValue);
+  end;
+  if i >= 0 then begin
+    LuaPrint.FCanvas.Pen.Style := TPenSTyle(i);
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.pen_style(%d)', [i]));
+  end;
+end;
+
+constructor TLuaPenObject.Create(L: Plua_State; lp: TLuaPrint);
+begin
+  inherited Create(L);
+  LuaPrint := lp;
+end;
+
+destructor TLuaPenObject.Destroy;
+begin
+  inherited Destroy;
+end;
+
 { TLuaBrushObject }
 
 function TLuaBrushObject.GetStyle: string;
@@ -485,12 +574,42 @@ begin
    Integer(LuaPrint.FCanvas.Brush.Style));
 end;
 
-procedure TLuaBrushObject.SetStyle(const AValue: string);
+function TLuaBrushObject.GetColor: string;
 begin
-  LuaPrint.FCanvas.Brush.Style :=
-   TBrushSTyle(GetEnumValue(TypeInfo(TBrushStyle), AValue));
-  LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.brush_style(%s)', [AValue]));
+  Result := GetEnumName(TypeInfo(TColor),
+   Integer(LuaPrint.FCanvas.Brush.Color));
+end;
+
+procedure TLuaBrushObject.SetColor(const AValue: string);
+var
+  i: integer;
+begin
+  try
+    i := StrToInt(AValue);
+  except
+    i := StringToColor(AValue);
+  end;
+  if i >= 0 then begin
+    LuaPrint.FCanvas.Brush.Color := TColor(i);
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.brush_color(%d)', [i]));
+  end;
+end;
+
+procedure TLuaBrushObject.SetStyle(const AValue: string);
+var
+  i: integer;
+begin
+  try
+    i := StrToInt(AValue);
+  except
+    i := GetEnumValue(TypeInfo(TBrushStyle), AValue);
+  end;
+  if i >= 0 then begin
+    LuaPrint.FCanvas.Brush.Style := TBrushSTyle(i);
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.brush_style(%d)', [i]));
+  end;
 end;
 
 constructor TLuaBrushObject.Create(L: Plua_State; lp: TLuaPrint);
@@ -582,10 +701,27 @@ begin
   Result := 0;
 end;
 
+function TLuaPrintRunObject.l4l_pen_color: integer;
+begin
+  LuaPrint.FCanvas.Pen.Color := TColor(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_pen_style: integer;
+begin
+  LuaPrint.FCanvas.Pen.Style := TPenStyle(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_brush_color: integer;
+begin
+  LuaPrint.FCanvas.Brush.Color := TColor(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
 function TLuaPrintRunObject.l4l_brush_style: integer;
 begin
-  LuaPrint.FCanvas.Brush.Style :=
-   TBrushSTyle(GetEnumValue(TypeInfo(TBrushStyle), lua_tostring(LS, 1)));
+  LuaPrint.FCanvas.Brush.Style := TBrushStyle(lua_tointeger(LS, 1));
   Result := 0;
 end;
 
