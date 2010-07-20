@@ -69,6 +69,7 @@ object Form1: TForm1
       'end'
       ''
       'DrawFrame()'
+      'P.DrawImage(0,0,10000,10000,"cheetah.jpg")'
       'P.line(0, 2000, P.pageWidth, 2000)'
       'P.TextOut(2000, 3000, "ABCDEFG")'
       'P.line(0, 4000, P.pageWidth, 4000)'
