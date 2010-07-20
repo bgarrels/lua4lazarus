@@ -25,18 +25,18 @@ type
     ScrollBox: TScrollBox;
     procedure ButtonPrintClick(Sender: TObject);
     procedure ComboZoomKeyDown(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
+      {%H-}Shift: TShiftState);
     procedure ComboZoomSelect(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure FormMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
-    procedure FormMouseUp(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
-    procedure FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
+      {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
+    procedure FormMouseMove(Sender: TObject; {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
+    procedure FormMouseUp(Sender: TObject; {%H-}Button: TMouseButton;
+      {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
+    procedure FormMouseWheelDown(Sender: TObject; {%H-}Shift: TShiftState;
+      {%H-}MousePos: TPoint; {%H-}var Handled: Boolean);
+    procedure FormMouseWheelUp(Sender: TObject; {%H-}Shift: TShiftState;
+      {%H-}MousePos: TPoint; {%H-}var Handled: Boolean);
     procedure FormShow(Sender: TObject);
     procedure MenuItem1Click(Sender: TObject);
     procedure MenuItem2Click(Sender: TObject);
@@ -47,7 +47,7 @@ type
     Zoom: integer;
     DragPoint: TPoint;
     DragImage, MovePage: boolean;
-    procedure DoSetZoomText(Data: PtrInt);
+    procedure DoSetZoomText({%H-}Data: PtrInt);
   public
     { public declarations }
     LP: TLuaPrint;
@@ -127,7 +127,7 @@ var
   p: TPoint;
 begin
   if DragImage then begin
-    GetCursorPos(p);
+    GetCursorPos(p{%H-});
     if p.X > DragPoint.X then begin
       ScrollBox.HorzScrollBar.Position:=
        ScrollBox.HorzScrollBar.Position - (p.X - Dragpoint.X);
