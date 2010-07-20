@@ -75,6 +75,7 @@ type
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
+    function l4l_DrawImage: integer;
     function l4l_NewPage: integer;
     property l4l_pageWidth: integer read GetPageWidth;
     property l4l_pageHeight: integer read GetPageHeight;
@@ -98,6 +99,7 @@ type
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
+    function l4l_DrawImage: integer;
   end;
 
 implementation
@@ -434,6 +436,16 @@ begin
   Result := 0;
 end;
 
+function TLuaPrintObject.l4l_DrawImage: integer;
+begin
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%s);',
+   [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+    LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
+    str_param(lua_tostring(LS, 5))]));
+  Result := 0;
+end;
+
 function TLuaPrintObject.l4l_NewPage: integer;
 begin
   LuaPrint.NewPage;
@@ -497,6 +509,23 @@ begin
     LuaPrint.FCanvas.Line(
      zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
      zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
+  end;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_DrawImage: integer;
+var
+  g: TJpegImage;
+begin
+  g := TJpegImage.Create;
+  try
+    g.LoadFromFile(lua_tostring(LS, 5));
+    LuaPrint.FCanvas.StretchDraw(
+     Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
+          zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
+     g);
+  finally
+    g.Free;
   end;
   Result := 0;
 end;
