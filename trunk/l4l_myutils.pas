@@ -3,7 +3,7 @@
 
     sample:TLuaMyUtilsObject
 
-    License: BSD
+    License: New BSD
 }
 unit l4l_myutils;
 
