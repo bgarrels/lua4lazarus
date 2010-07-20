@@ -58,21 +58,23 @@ type
 
   { TLuaPrintObject }
 
+  TLuaFontObject = class;
   TLuaPenObject = class;
   TLuaBrushObject = class;
 
   TLuaPrintObject  = class(TLuaObject)
   private
-    LuaPrint: TLuaPrint;
     FUnits: char;
     function DP2LP(dp: integer): integer;
     function GetBrushObject: TLuaBrushObject;
+    function GetFontObject: TLuaFontObject;
     function GetPageHeight: integer;
     function GetPageNumber: integer;
     function GetPageWidth: integer;
     function GetPenObject: TLuaPenObject;
     function LP2DP(lp: integer): integer;
   protected
+    LuaPrint: TLuaPrint;
   public
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
@@ -80,26 +82,53 @@ type
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
+    function l4l_TextWidth: integer;
+    function l4l_TextHeight: integer;
     function l4l_DrawImage: integer;
     function l4l_NewPage: integer;
     property l4l_pageWidth: integer read GetPageWidth;
     property l4l_pageHeight: integer read GetPageHeight;
     property l4l_pageNumber: integer read GetPageNumber;
     property l4l_units: char read FUnits write FUnits;
+    property l4l_Font: TLuaFontObject read GetFontObject;
     property l4l_Pen: TLuaPenObject read GetPenObject;
     property l4l_Brush: TLuaBrushObject read GetBrushObject;
+  end;
+
+  { TLuaFontObject }
+
+  TLuaFontObject  = class(TLuaObject)
+  private
+    function GetHeight: integer;
+    function GetName: string;
+    function GetSize: integer;
+    function GetStyle: string;
+    procedure SetHeight(const AValue: integer);
+    procedure SetName(const AValue: string);
+    procedure SetSize(const AValue: integer);
+    procedure SetStyle(const AValue: string);
+  protected
+    LuaPrint: TLuaPrint;
+  public
+    constructor Create(L : Plua_State; lp: TLuaPrint); overload;
+    destructor Destroy; override;
+  published
+    property l4l_Name: string read GetName write SetName;
+    property l4l_Size: integer read GetSize write SetSize;
+    property l4l_Height: integer read GetHeight write SetHeight;
+    property l4l_Style: string read GetStyle write SetStyle;
   end;
 
   { TLuaPenObject }
 
   TLuaPenObject  = class(TLuaObject)
   private
-    LuaPrint: TLuaPrint;
     function GetColor: string;
     function GetStyle: string;
     procedure SetColor(const AValue: string);
     procedure SetStyle(const AValue: string);
   protected
+    LuaPrint: TLuaPrint;
   public
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
@@ -112,12 +141,12 @@ type
 
   TLuaBrushObject  = class(TLuaObject)
   private
-    LuaPrint: TLuaPrint;
     function GetColor: string;
     function GetStyle: string;
     procedure SetColor(const AValue: string);
     procedure SetStyle(const AValue: string);
   protected
+    LuaPrint: TLuaPrint;
   public
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
@@ -143,6 +172,10 @@ type
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
     function l4l_DrawImage: integer;
+    function l4l_font_name: integer;
+    function l4l_font_size: integer;
+    function l4l_font_height: integer;
+    function l4l_font_style: integer;
     function l4l_pen_color: integer;
     function l4l_pen_style: integer;
     function l4l_brush_color: integer;
@@ -409,6 +442,11 @@ begin
   Result := TLuaBrushObject.Create(LS, LuaPrint);
 end;
 
+function TLuaPrintObject.GetFontObject: TLuaFontObject;
+begin
+  Result := TLuaFontObject.Create(LS, LuaPrint);
+end;
+
 function TLuaPrintObject.GetPenObject: TLuaPenObject;
 begin
   Result := TLuaPenObject.Create(LS, LuaPrint);
@@ -493,6 +531,18 @@ begin
   Result := 0;
 end;
 
+function TLuaPrintObject.l4l_TextWidth: integer;
+begin
+  lua_pushinteger(LS, DP2LP(LuaPrint.FCanvas.TextWidth(lua_tostring(LS, 1))));
+  Result := 1;
+end;
+
+function TLuaPrintObject.l4l_TextHeight: integer;
+begin
+  lua_pushinteger(LS, DP2LP(LuaPrint.FCanvas.TextHeight(lua_tostring(LS, 1))));
+  Result := 1;
+end;
+
 function TLuaPrintObject.l4l_DrawImage: integer;
 begin
   LuaPrint.AddOrder(
@@ -507,6 +557,75 @@ function TLuaPrintObject.l4l_NewPage: integer;
 begin
   LuaPrint.NewPage;
   Result := 0;
+end;
+
+{ TLuaFontObject }
+
+constructor TLuaFontObject.Create(L: Plua_State; lp: TLuaPrint);
+begin
+  inherited Create(L);
+  LuaPrint := lp;
+end;
+
+destructor TLuaFontObject.Destroy;
+begin
+  inherited Destroy;
+end;
+
+function TLuaFontObject.GetHeight: integer;
+begin
+  Result := LuaPrint.FCanvas.Font.Height;
+end;
+
+function TLuaFontObject.GetName: string;
+begin
+  Result := LuaPrint.FCanvas.Font.Name;
+end;
+
+function TLuaFontObject.GetSize: integer;
+begin
+  Result := LuaPrint.FCanvas.Font.Size;
+end;
+
+function TLuaFontObject.GetStyle: string;
+begin
+  Result := SetToString(PTypeInfo(TypeInfo(TFontStyles)),
+   Integer(LuaPrint.FCanvas.Font.Style), false);
+end;
+
+procedure TLuaFontObject.SetHeight(const AValue: integer);
+begin
+  LuaPrint.FCanvas.Font.Height := AValue;
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.font_height(%d)', [AValue]));
+end;
+
+procedure TLuaFontObject.SetName(const AValue: string);
+begin
+  LuaPrint.FCanvas.Font.Name := AValue;
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.font_name(%s)', [AValue]));
+end;
+
+procedure TLuaFontObject.SetSize(const AValue: integer);
+begin
+  LuaPrint.FCanvas.Font.Size := AValue;
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.font_size(%d)', [AValue]));
+end;
+
+procedure TLuaFontObject.SetStyle(const AValue: string);
+var
+  i: integer;
+begin
+  try
+    i := StrToInt(AValue);
+  except
+    i := StringToSet(PTypeInfo(TypeInfo(TFontStyles)), AValue);
+  end;
+  LuaPrint.FCanvas.Font.Style := TFontStyles(i);
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.font_style(%d)', [i]));
 end;
 
 { TLuaPenObject }
@@ -698,6 +817,32 @@ begin
   finally
     g.Free;
   end;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_font_name: integer;
+begin
+  LuaPrint.FCanvas.Font.Name := lua_tostring(LS, 1);
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_font_size: integer;
+begin
+  LuaPrint.FCanvas.Font.Size := lua_tointeger(LS, 1);
+  LuaPrint.FCanvas.Font.Height:=
+   LuaPrint.FCanvas.Font.Height * LuaPrint.FZoom div 100;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_font_height: integer;
+begin
+  LuaPrint.FCanvas.Font.Height := lua_tointeger(LS, 1) * LuaPrint.FZoom div 100;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_font_style: integer;
+begin
+  LuaPrint.FCanvas.Font.Style := TFontStyles(lua_tointeger(LS, 1));
   Result := 0;
 end;
 
