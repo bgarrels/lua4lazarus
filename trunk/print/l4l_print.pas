@@ -21,6 +21,10 @@ type
 
   TLuaPrint = class(TObject)
   private
+    function GetPageCount: integer;
+    function GetPageSize: TSize;
+    function GetPaperSize: TSize;
+  protected
     LS: Plua_State;
     FPageList: TObjectList;
     FBmpList: TObjectList;
@@ -30,10 +34,7 @@ type
     FCanvas: TCanvas;
     FOffset: TPoint;
     FZoom: integer;
-    function GetPageCount: integer;
     function DP2LP(dp: integer): integer;
-    function GetPageSize: TSize;
-    function GetPaperSize: TSize;
     function LP2DP(lp: integer): integer;
     function z(i: integer): integer;
     procedure AddOrder(const s: string);
@@ -159,11 +160,11 @@ type
 
   TLuaPrintRunObject  = class(TLuaObject)
   private
+  protected
     LuaPrint: TLuaPrint;
     function w(i: integer): integer;
     function zx(i: integer): integer;
     function zy(i: integer): integer;
-  protected
   public
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
