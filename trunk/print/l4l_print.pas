@@ -304,8 +304,8 @@ begin
   bmp.Canvas.Pen.Assign(FCanvas.Pen);
   bmp.Canvas.Brush.Assign(FCanvas.Brush);
   FCanvas:= bmp.Canvas;
-  //FCanvas.Font.PixelsPerInch:= Printer.YDPI;
-  //FCanvas.Font.Size:= FCanvas.Font.Size;
+  FCanvas.Font.PixelsPerInch:= Printer.YDPI;
+  FCanvas.Font.Size:= FCanvas.Font.Size;
 end;
 
 procedure TLuaPrint.Run(const SourceCode: string);
