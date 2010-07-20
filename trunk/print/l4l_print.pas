@@ -42,7 +42,7 @@ type
     destructor Destroy; override;
     procedure BeginDoc;
     procedure BeginDoc(Margin: TRect);
-    function Run(const SourceCode: string): integer;
+    procedure Run(const SourceCode: string);
     procedure EndDoc;
     procedure NewPage;
     procedure Play(pageNumber: integer; Canvas: TCanvas;
@@ -69,11 +69,12 @@ type
     function LP2DP(lp: integer): integer;
   protected
   public
-    constructor Create(L : Plua_State; lp: TLuaPrint);
+    constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
   published
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
+    function l4l_Line: integer;
     function l4l_NewPage: integer;
     property l4l_pageWidth: integer read GetPageWidth;
     property l4l_pageHeight: integer read GetPageHeight;
@@ -91,11 +92,12 @@ type
     function zy(i: integer): integer;
   protected
   public
-    constructor Create(L : Plua_State; lp: TLuaPrint);
+    constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
   published
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
+    function l4l_Line: integer;
   end;
 
 implementation
@@ -104,7 +106,7 @@ uses
 
 const
   MM_P_INCH = 2540;
-  PRUN_NAME = '__PrintRun__';
+  PRUN_NAME = 'P_';
 
 { TLuaPrint }
 
@@ -223,7 +225,7 @@ begin
   //FCanvas.Font.Size:= FCanvas.Font.Size;
 end;
 
-function TLuaPrint.Run(const SourceCode: string): integer;
+procedure TLuaPrint.Run(const SourceCode: string);
 begin
   if luaL_loadbuffer(LS, PChar(SourceCode), Length(SourceCode), 'print') <> 0 then
     Raise Exception.Create('');
@@ -242,7 +244,6 @@ procedure TLuaPrint.Play(pageNumber: integer; Canvas: TCanvas; Margin: TRect;
 var
   i : integer;
   sl: TStringList;
-  ms: TMemoryStream;
   h: HRGN;
   x, y: integer;
   bmp: TBitmap;
@@ -412,6 +413,25 @@ begin
    Format(PRUN_NAME + '.rectangle(%d,%d,%d,%d);',
    [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
     LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4))]));
+  Result := 0;
+end;
+
+function TLuaPrintObject.l4l_Line: integer;
+var
+  c: integer;
+begin
+  c := lua_gettop(LS);
+  if c < 4 then begin
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.line(%d,%d);',
+     [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2))]));
+  end else begin
+    LuaPrint.AddOrder(
+     Format(PRUN_NAME + '.line(%d,%d,%d,%d);',
+     [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+      LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4))]));
+  end;
+  Result := 0;
 end;
 
 function TLuaPrintObject.l4l_NewPage: integer;
@@ -462,6 +482,23 @@ begin
   LuaPrint.FCanvas.Rectangle(
    zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
    zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_Line: integer;
+var
+  c: integer;
+begin
+  c := lua_gettop(LS);
+  if c < 4 then begin
+    LuaPrint.FCanvas.LineTo(
+     zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)));
+  end else begin
+    LuaPrint.FCanvas.Line(
+     zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
+     zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
+  end;
+  Result := 0;
 end;
 
 end.
