@@ -121,7 +121,7 @@ begin
           else
             lua_pushboolean(L, True);
         end;
-        tkObject: begin
+        tkClass: begin
           o:= GetObjectProp(obj, pi);
           if o is TLuaObject then begin
             PushLuaObject(o as TLuaObject);
@@ -163,7 +163,7 @@ begin
         SetOrdProp(obj, pi, lua_tointeger(L, 3));
       tkFloat: SetFloatProp(obj, pi, lua_tonumber(L, 3));
       tkBool: SetOrdProp(obj, pi, Ord(lua_toboolean(L, 3)));
-      tkObject: begin
+      tkClass: begin
         lua_getfield(L, 3, FIELD_OBJ);
         p:= lua_touserdata(L, -1);
         if Assigned(p) and Assigned(p^) then begin

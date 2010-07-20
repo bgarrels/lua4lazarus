@@ -58,11 +58,14 @@ type
 
   { TLuaPrintObject }
 
+  TLuaBrushObject = class;
+
   TLuaPrintObject  = class(TLuaObject)
   private
     LuaPrint: TLuaPrint;
     FUnits: char;
     function DP2LP(dp: integer): integer;
+    function GetBrushObject: TLuaBrushObject;
     function GetPageHeight: integer;
     function GetPageNumber: integer;
     function GetPageWidth: integer;
@@ -81,6 +84,22 @@ type
     property l4l_pageHeight: integer read GetPageHeight;
     property l4l_pageNumber: integer read GetPageNumber;
     property l4l_units: char read FUnits write FUnits;
+    property l4l_Brush: TLuaBrushObject read GetBrushObject;
+  end;
+
+  { TLuaBrushObject }
+
+  TLuaBrushObject  = class(TLuaObject)
+  private
+    LuaPrint: TLuaPrint;
+    function GetStyle: string;
+    procedure SetStyle(const AValue: string);
+  protected
+  public
+    constructor Create(L : Plua_State; lp: TLuaPrint); overload;
+    destructor Destroy; override;
+  published
+    property l4l_style: string read GetStyle write SetStyle;
   end;
 
   { TLuaPrintRunObject }
@@ -100,11 +119,12 @@ type
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
     function l4l_DrawImage: integer;
+    function l4l_brush_style: integer;
   end;
 
 implementation
 uses
-  LCLType, LCLIntf, lauxlib;
+  LCLType, LCLIntf, typinfo, lauxlib;
 
 const
   MM_P_INCH = 2540;
@@ -357,6 +377,11 @@ begin
   Result:= Trunc(dp * i / LuaPrint.FDPI + 0.5);
 end;
 
+function TLuaPrintObject.GetBrushObject: TLuaBrushObject;
+begin
+  Result := TLuaBrushObject.Create(LS, LuaPrint);
+end;
+
 function TLuaPrintObject.GetPageHeight: integer;
 begin
   Result := DP2LP(LuaPrint.PageSize.cy);
@@ -403,7 +428,7 @@ end;
 function TLuaPrintObject.l4l_TextOut: integer;
 begin
   LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.TextOut(%d,%d,%s);',
+   Format(PRUN_NAME + '.TextOut(%d,%d,%s)',
    [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
    str_param(lua_tostring(LS, 3))]));
   Result := 0;
@@ -412,7 +437,7 @@ end;
 function TLuaPrintObject.l4l_Rectangle: integer;
 begin
   LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.rectangle(%d,%d,%d,%d);',
+   Format(PRUN_NAME + '.rectangle(%d,%d,%d,%d)',
    [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
     LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4))]));
   Result := 0;
@@ -425,11 +450,11 @@ begin
   c := lua_gettop(LS);
   if c < 4 then begin
     LuaPrint.AddOrder(
-     Format(PRUN_NAME + '.line(%d,%d);',
+     Format(PRUN_NAME + '.line(%d,%d)',
      [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2))]));
   end else begin
     LuaPrint.AddOrder(
-     Format(PRUN_NAME + '.line(%d,%d,%d,%d);',
+     Format(PRUN_NAME + '.line(%d,%d,%d,%d)',
      [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
       LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4))]));
   end;
@@ -439,7 +464,7 @@ end;
 function TLuaPrintObject.l4l_DrawImage: integer;
 begin
   LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%s);',
+   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%s)',
    [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
     LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
     str_param(lua_tostring(LS, 5))]));
@@ -450,6 +475,33 @@ function TLuaPrintObject.l4l_NewPage: integer;
 begin
   LuaPrint.NewPage;
   Result := 0;
+end;
+
+{ TLuaBrushObject }
+
+function TLuaBrushObject.GetStyle: string;
+begin
+  Result := GetEnumName(TypeInfo(TBrushStyle),
+   Integer(LuaPrint.FCanvas.Brush.Style));
+end;
+
+procedure TLuaBrushObject.SetStyle(const AValue: string);
+begin
+  LuaPrint.FCanvas.Brush.Style :=
+   TBrushSTyle(GetEnumValue(TypeInfo(TBrushStyle), AValue));
+  LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.brush_style(%s)', [AValue]));
+end;
+
+constructor TLuaBrushObject.Create(L: Plua_State; lp: TLuaPrint);
+begin
+  inherited Create(L);
+  LuaPrint := lp;
+end;
+
+destructor TLuaBrushObject.Destroy;
+begin
+  inherited Destroy;
 end;
 
 { TLuaPrintRunObject }
@@ -527,6 +579,13 @@ begin
   finally
     g.Free;
   end;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_brush_style: integer;
+begin
+  LuaPrint.FCanvas.Brush.Style :=
+   TBrushSTyle(GetEnumValue(TypeInfo(TBrushStyle), lua_tostring(LS, 1)));
   Result := 0;
 end;
 
