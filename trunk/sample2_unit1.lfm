@@ -14,15 +14,15 @@ object Form1: TForm1
     Width = 510
     Lines.Strings = (
       'ie = CreateActiveXObject("InternetExplorer.Application")'
-      'ie.Visible = true'
+      'ie.visible = true'
       'while (ie.busy) do end'
       'ie.Navigate2("http://www.google.com")'
       'while (ie.busy) do end'
       'while (ie.readyState ~= 4) do end'
-      'while (ie.Document.readyState() ~= "complete") do end'
-      'tags = ie.Document.getElementsByTagName("a")'
+      'while (ie.document.readystate ~= "complete") do end'
+      'tags = ie.document.getElementsByTagName("a")'
       'for t in tags do'
-      '  print(t.innerText() .. " = " .. t.href())'
+      '  print(t.innertext .. " = " .. t.HREF)'
       'end'
     )
     ScrollBars = ssAutoBoth
