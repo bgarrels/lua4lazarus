@@ -881,15 +881,15 @@ end;
 
 function TLuaPrintRunObject.l4l_DrawImage: integer;
 var
-  g: TJpegImage;
+  g: TPicture;
 begin
-  g := TJpegImage.Create;
+  g := TPicture.Create;
   try
     g.LoadFromFile(lua_tostring(LS, 5));
     LuaPrint.FCanvas.StretchDraw(
      Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
           zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
-     g);
+     g.Graphic);
   finally
     g.Free;
   end;
