@@ -172,7 +172,7 @@ begin
           SetObjectProp(obj, pi, TObject(nil));
       end;
       else begin
-        SetUnicodeStrProp(obj, pi, lua_tostring(L, 3));
+        SetStrProp(obj, pi, lua_tostring(L, 3));
       end;
     end;
   except
