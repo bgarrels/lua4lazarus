@@ -86,12 +86,12 @@ object Form1: TForm1
       'P.Font.Style = "fsItalic, fsUnderline"'
       'P.Font.Size = 10'
       'P.TextOut(2000, 3000, "HIJKLMN")'
+      'P.Font.Style = ""'
       'P.TextOut(3000, 5000, P.PageNumber)'
       'P.NewPage()'
       ''
       'P.Pen.Color = "clBlue"'
       'DrawFrame()'
-      'P.Font.Style = ""'
       'P.Font.Size = 40'
       'y = 3000'
       'P.TextOut(2000, y, "OPQRSTU")'
@@ -101,6 +101,7 @@ object Form1: TForm1
       'P.TextOut(3000, y, P.PageNumber)'
       'P.NewPage()'
     )
+    ParentFont = False
     ScrollBars = ssAutoBoth
     TabOrder = 0
   end
