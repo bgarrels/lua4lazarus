@@ -25,6 +25,7 @@ type
     function GetPageCount: integer;
     function GetPageSize: TSize;
     function GetPaperSize: TSize;
+    procedure CopyCanvas(src, dst: TCanvas);
   protected
     LS: Plua_State;
     FPageList: TObjectList;
@@ -228,6 +229,13 @@ begin
   Result.cy:= FPaperRect.PhysicalRect.Bottom;
 end;
 
+procedure TLuaPrint.CopyCanvas(src, dst: TCanvas);
+begin
+  dst.Font.Assign(src.Font);
+  dst.Pen.Assign(src.Pen);
+  dst.Brush.Assign(src.Brush);
+end;
+
 function TLuaPrint.LP2DP(lp: integer): integer;
 begin
   Result:= Trunc(lp * FDPI / MM_P_INCH + 0.5);
@@ -290,17 +298,12 @@ begin
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= FDPI;
   FCanvas.Font.Size:= 10;
-
-  FInitCanvas.Font.Assign(FCanvas.Font);
-  FInitCanvas.Pen.Assign(FCanvas.Pen);
-  FInitCanvas.Brush.Assign(FCanvas.Brush);
+  CopyCanvas(FCanvas, FInitCanvas);
 end;
 
 procedure TLuaPrint.EndDoc;
 begin
-  FCanvas.Font.Assign(FInitCanvas.Font);
-  FCanvas.Pen.Assign(FInitCanvas.Pen);
-  FCanvas.Brush.Assign(FInitCanvas.Brush);
+  CopyCanvas(FInitCanvas, FCanvas);
   if FPageList.Count > 0 then begin
     if TStringList(FPageList[FPageList.Count-1]).Count = 0 then begin
       FPageList.Delete(FPageList.Count-1);
@@ -320,18 +323,11 @@ begin
   bmp.Canvas.Font.Assign(FCanvas.Font);
   bmp.Canvas.Pen.Assign(FCanvas.Pen);
   bmp.Canvas.Brush.Assign(FCanvas.Brush);
-
-  FCanvas.Font.Assign(FInitCanvas.Font);
-  FCanvas.Pen.Assign(FInitCanvas.Pen);
-  FCanvas.Brush.Assign(FInitCanvas.Brush);
-
+  CopyCanvas(FInitCanvas, FCanvas);
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= Printer.YDPI;
   FCanvas.Font.Size:= FCanvas.Font.Size;
-
-  FInitCanvas.Font.Assign(FCanvas.Font);
-  FInitCanvas.Pen.Assign(FCanvas.Pen);
-  FInitCanvas.Brush.Assign(FCanvas.Brush);
+  CopyCanvas(FCanvas, FInitCanvas);
 end;
 
 procedure TLuaPrint.Run(const SourceCode: string);
