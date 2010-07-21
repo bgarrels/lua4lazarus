@@ -30,6 +30,7 @@ type
     LS: Plua_State;
     FPageList: TObjectList;
     FBmpList: TObjectList;
+    FResList: TObjectList;
     FUserMargin, FRealMargin: TRect;
     FPaperRect: TPaperRect;
     FDPI, FPlayDPI: integer;
@@ -256,6 +257,7 @@ begin
   LS := L;
   FPageList:= TObjectList.Create(True);
   FBmpList:= TObjectList.Create(True);
+  FResList:= TObjectList.Create(True);
   FInitCanvas := TCanvas.Create;
 end;
 
@@ -263,6 +265,7 @@ destructor TLuaPrint.Destroy;
 begin
   FPageList.Free;
   FBmpList.Free;
+  FResList.Free;
   FInitCanvas.Free;
   inherited Destroy;
 end;
@@ -299,6 +302,7 @@ begin
   FCanvas.Font.PixelsPerInch:= FDPI;
   FCanvas.Font.Size:= 10;
   CopyCanvas(FCanvas, FInitCanvas);
+  FResList.Clear;
 end;
 
 procedure TLuaPrint.EndDoc;
@@ -563,12 +567,19 @@ begin
 end;
 
 function TLuaPrintObject.l4l_DrawImage: integer;
+var
+  fn: string;
+  ms: TMemoryStream;
 begin
+  fn := lua_tostring(LS, 5);
+  ms := TMemoryStream.Create;
+  ms.LoadFromFile(fn);
+  LuaPrint.FResList.Add(ms);
   LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%s)',
+   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%s)',
    [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
     LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
-    str_param(lua_tostring(LS, 5))]));
+    LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
   Result := 0;
 end;
 
@@ -881,11 +892,15 @@ end;
 
 function TLuaPrintRunObject.l4l_DrawImage: integer;
 var
+  ms: TStream;
   g: TPicture;
 begin
   g := TPicture.Create;
   try
-    g.LoadFromFile(lua_tostring(LS, 5));
+    ms := TStream(LuaPrint.FResList[lua_tointeger(LS, 5)]);
+    ms.Position:= 0;
+    //g.LoadFromStreamWithFileExt(ms, lua_tostring(LS, 6));
+    g.LoadFromStream(ms);
     LuaPrint.FCanvas.StretchDraw(
      Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
           zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
