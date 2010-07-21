@@ -67,7 +67,7 @@ begin
     //luaopen_string(L);
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateActiveXObject', @CreateActiveXObject);
-    PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils');
+    l4l_PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils');
     try
       s:= Memo1.Text;
       if luaL_loadbuffer(L, PChar(s), Length(s), 'sample') <> 0 then

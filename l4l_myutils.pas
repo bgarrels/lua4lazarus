@@ -104,7 +104,7 @@ end;
 
 function CreateMyUtilsObject(L : Plua_State) : Integer; cdecl;
 begin
-  PushLuaObject(TLuaMyUtilsObject.Create(L));
+  l4l_PushLuaObject(TLuaMyUtilsObject.Create(L));
   Result := 1;
 end;
 

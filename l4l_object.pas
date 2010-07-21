@@ -40,7 +40,7 @@ type
   published
   end;
 
-procedure PushLuaObject(obj: TLuaObject);
+procedure l4l_PushLuaObject(obj: TLuaObject);
 function l4l_isobject(L : Plua_State;  n: Integer): boolean;
 function l4l_isobject(L : Plua_State;  n: Integer; c: TClass): boolean;
 function l4l_toobject(L : Plua_State;  n: Integer): TLuaObject;
@@ -124,7 +124,7 @@ begin
         tkClass: begin
           o:= GetObjectProp(obj, pi);
           if o is TLuaObject then begin
-            PushLuaObject(o as TLuaObject);
+            l4l_PushLuaObject(o as TLuaObject);
           end else begin
             lua_pushnil(L);
           end;
@@ -206,7 +206,7 @@ begin
   end;
 end;
 
-procedure PushLuaObject(obj: TLuaObject);
+procedure l4l_PushLuaObject(obj: TLuaObject);
 type
   TMethodRec = packed record
     name : pshortstring;

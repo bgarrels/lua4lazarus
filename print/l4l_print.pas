@@ -21,6 +21,7 @@ type
 
   TLuaPrint = class(TObject)
   private
+    FInitCanvas: TCanvas;
     function GetPageCount: integer;
     function GetPageSize: TSize;
     function GetPaperSize: TSize;
@@ -247,12 +248,14 @@ begin
   LS := L;
   FPageList:= TObjectList.Create(True);
   FBmpList:= TObjectList.Create(True);
+  FInitCanvas := TCanvas.Create;
 end;
 
 destructor TLuaPrint.Destroy;
 begin
   FPageList.Free;
   FBmpList.Free;
+  FInitCanvas.Free;
   inherited Destroy;
 end;
 
@@ -287,10 +290,17 @@ begin
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= FDPI;
   FCanvas.Font.Size:= 10;
+
+  FInitCanvas.Font.Assign(FCanvas.Font);
+  FInitCanvas.Pen.Assign(FCanvas.Pen);
+  FInitCanvas.Brush.Assign(FCanvas.Brush);
 end;
 
 procedure TLuaPrint.EndDoc;
 begin
+  FCanvas.Font.Assign(FInitCanvas.Font);
+  FCanvas.Pen.Assign(FInitCanvas.Pen);
+  FCanvas.Brush.Assign(FInitCanvas.Brush);
   if FPageList.Count > 0 then begin
     if TStringList(FPageList[FPageList.Count-1]).Count = 0 then begin
       FPageList.Delete(FPageList.Count-1);
@@ -304,6 +314,10 @@ procedure TLuaPrint.NewPage;
 var
   bmp: TBitmap;
 begin
+  FCanvas.Font.Assign(FInitCanvas.Font);
+  FCanvas.Pen.Assign(FInitCanvas.Pen);
+  FCanvas.Brush.Assign(FInitCanvas.Brush);
+
   FPageList.Add(TStringList.Create);
   bmp := TBitmap.Create;
   FBmpList.Add(bmp);
@@ -313,6 +327,10 @@ begin
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= Printer.YDPI;
   FCanvas.Font.Size:= FCanvas.Font.Size;
+
+  FInitCanvas.Font.Assign(FCanvas.Font);
+  FInitCanvas.Pen.Assign(FCanvas.Pen);
+  FInitCanvas.Brush.Assign(FCanvas.Brush);
 end;
 
 procedure TLuaPrint.Run(const SourceCode: string);
@@ -367,7 +385,7 @@ begin
     try
       SelectClipRgn(Canvas.Handle, h);
       sl := TStringList(FPageList[pageNumber-1]);
-      PushLuaObject(TLuaPrintRunObject.Create(LS, Self));
+      l4l_PushLuaObject(TLuaPrintRunObject.Create(LS, Self));
       lua_setglobal(LS, PRUN_NAME);
       try
         if luaL_loadbuffer(LS, PChar(sl.Text), Length(sl.Text), nil) <> 0 then
