@@ -941,7 +941,7 @@ begin
       5: begin
         x1 := zx(lua_tointeger(LS, 1));
         y1 := zy(lua_tointeger(LS, 2));
-        n := lua_tonumber(LS, 3);
+        n := lua_tonumber(LS, 3) * LuaPrint.FZoom / 100;
         LuaPrint.FCanvas.StretchDraw(
          Rect(x1, y1, x1 + Trunc(g.Width * n), y1 + Trunc(g.Height * n)),
          g.Graphic);
