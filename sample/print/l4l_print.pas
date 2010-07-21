@@ -571,15 +571,32 @@ var
   fn: string;
   ms: TMemoryStream;
 begin
-  fn := lua_tostring(LS, 5);
+  fn := lua_tostring(LS, -1);
   ms := TMemoryStream.Create;
   ms.LoadFromFile(fn);
   LuaPrint.FResList.Add(ms);
-  LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%s)',
-   [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
-    LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
-    LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
+  case lua_gettop(LS) of
+    5: begin
+      LuaPrint.AddOrder(
+       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%s)',
+       [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+        LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
+        LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
+    end;
+    4: begin
+      LuaPrint.AddOrder(
+       Format(PRUN_NAME + '.drawimage(%d,%d,%f,%d,%s)',
+       [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+        lua_tonumber(LS, 3),
+        LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
+    end;
+    3: begin
+      LuaPrint.AddOrder(
+       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%s)',
+       [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+        LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
+    end;
+  end;
   Result := 0;
 end;
 
@@ -894,17 +911,36 @@ function TLuaPrintRunObject.l4l_DrawImage: integer;
 var
   ms: TStream;
   g: TPicture;
+  x, y: integer;
+  n: lua_number;
 begin
   g := TPicture.Create;
   try
-    ms := TStream(LuaPrint.FResList[lua_tointeger(LS, 5)]);
+    ms := TStream(LuaPrint.FResList[lua_tointeger(LS, -2)]);
     ms.Position:= 0;
-    //g.LoadFromStreamWithFileExt(ms, lua_tostring(LS, 6));
+    //g.LoadFromStreamWithFileExt(ms, lua_tostring(LS, -1));
     g.LoadFromStream(ms);
-    LuaPrint.FCanvas.StretchDraw(
-     Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
-          zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
-     g.Graphic);
+    case lua_gettop(LS) of
+      6: begin
+        LuaPrint.FCanvas.StretchDraw(
+         Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
+              zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
+         g.Graphic);
+      end;
+      5: begin
+        x := zx(lua_tointeger(LS, 1));
+        y := zy(lua_tointeger(LS, 2));
+        n := lua_tonumber(LS, 3);
+        LuaPrint.FCanvas.StretchDraw(
+         Rect(x, y, x + Trunc(g.Width * n), y + Trunc(g.Height * n)),
+         g.Graphic);
+      end;
+      4: begin
+        LuaPrint.FCanvas.Draw(
+         zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
+         g.Graphic);
+      end;
+    end;
   finally
     g.Free;
   end;
