@@ -652,7 +652,7 @@ procedure TLuaFontObject.SetName(const AValue: string);
 begin
   LPO.LuaPrint.FCanvas.Font.Name := AValue;
   LPO.LuaPrint.AddOrder(
-   Format(PRUN_NAME + '.font_name(%s)', [AValue]));
+   Format(PRUN_NAME + '.font_name(%s)', [str_param(AValue)]));
 end;
 
 procedure TLuaFontObject.SetSize(const AValue: integer);
