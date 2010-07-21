@@ -320,9 +320,7 @@ begin
   FPageList.Add(TStringList.Create);
   bmp := TBitmap.Create;
   FBmpList.Add(bmp);
-  bmp.Canvas.Font.Assign(FCanvas.Font);
-  bmp.Canvas.Pen.Assign(FCanvas.Pen);
-  bmp.Canvas.Brush.Assign(FCanvas.Brush);
+  CopyCanvas(FCanvas, bmp.Canvas);
   CopyCanvas(FInitCanvas, FCanvas);
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= Printer.YDPI;
@@ -368,9 +366,7 @@ begin
 
     FCanvas := Canvas;
     bmp := TBitmap(FBmpList[pageNumber-1]);
-    FCanvas.Font.Assign(bmp.Canvas.Font);
-    FCanvas.Pen.Assign(bmp.Canvas.Pen);
-    FCanvas.Brush.Assign(bmp.Canvas.Brush);
+    CopyCanvas(bmp.Canvas, FCanvas);
     i := FCanvas.Font.Size;
     FCanvas.Font.PixelsPerInch:= FPlayDpi;
     FCanvas.Font.Size:= i + 1;
