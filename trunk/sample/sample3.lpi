@@ -52,6 +52,7 @@
       <Filename Value="sample3"/>
     </Target>
     <SearchPaths>
+      <OtherUnitFiles Value="..\"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Linking>
