@@ -314,16 +314,17 @@ procedure TLuaPrint.NewPage;
 var
   bmp: TBitmap;
 begin
-  FCanvas.Font.Assign(FInitCanvas.Font);
-  FCanvas.Pen.Assign(FInitCanvas.Pen);
-  FCanvas.Brush.Assign(FInitCanvas.Brush);
-
   FPageList.Add(TStringList.Create);
   bmp := TBitmap.Create;
   FBmpList.Add(bmp);
   bmp.Canvas.Font.Assign(FCanvas.Font);
   bmp.Canvas.Pen.Assign(FCanvas.Pen);
   bmp.Canvas.Brush.Assign(FCanvas.Brush);
+
+  FCanvas.Font.Assign(FInitCanvas.Font);
+  FCanvas.Pen.Assign(FInitCanvas.Pen);
+  FCanvas.Brush.Assign(FInitCanvas.Brush);
+
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= Printer.YDPI;
   FCanvas.Font.Size:= FCanvas.Font.Size;
