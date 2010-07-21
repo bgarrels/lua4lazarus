@@ -66,7 +66,7 @@ end;
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  dbf1.FilePath := 'sample_db/'; // \lazarus\components\lazreport\samples\editor\db
+  dbf1.FilePath := 'db/'; // \lazarus\components\lazreport\samples\editor\db
   dbf1.TableName := 'disco.dbf';
 end;
 
