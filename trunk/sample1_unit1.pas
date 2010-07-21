@@ -58,7 +58,7 @@ type
 
 function CreateDbfObject(L : Plua_State) : Integer; cdecl;
 begin
-  PushLuaObject(TLuaDbf.Create(L));
+  l4l_PushLuaObject(TLuaDbf.Create(L));
   Result := 1;
 end;
 
@@ -105,8 +105,8 @@ begin
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateStringsObject', @CreateStringsObject);
     lua_register(L, 'CreateDbfObject', @CreateDbfObject);
-    //PushLuaObject(TLuaDbf.Create(L)); lua_setglobal(L, 'dbf'); // set global value.
-    PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils'); // set global value.
+    //l4l_PushLuaObject(TLuaDbf.Create(L)); lua_setglobal(L, 'dbf'); // set global value.
+    l4l_PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils'); // set global value.
     try
       s:= Memo1.Text;
       if luaL_loadbuffer(L, PChar(s), Length(s), 'sample1') <> 0 then

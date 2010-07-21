@@ -114,7 +114,7 @@ begin
       luaopen_base(L);
       //luaopen_string(L);
       //lua_register(L, 'CreateStringsObject', @CreateStringsObject);
-      PushLuaObject(TLuaPrintObject.Create(L, lp)); lua_setglobal(L, 'P');
+      l4l_PushLuaObject(TLuaPrintObject.Create(L, lp)); lua_setglobal(L, 'P');
       try
         lp.BeginDoc(Rect(2000, 3000, 2000, 3000));
         try

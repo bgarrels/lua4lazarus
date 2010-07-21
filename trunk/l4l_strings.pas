@@ -159,7 +159,7 @@ end;
 
 function CreateStringsObject(L : Plua_State) : Integer; cdecl;
 begin
-  PushLuaObject(TLuaStringsObject.Create(L));
+  l4l_PushLuaObject(TLuaStringsObject.Create(L));
   Result := 1;
 end;
 
