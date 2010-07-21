@@ -911,7 +911,7 @@ function TLuaPrintRunObject.l4l_DrawImage: integer;
 var
   ms: TStream;
   g: TPicture;
-  x, y: integer;
+  x1, y1, x2, y2, i: integer;
   n: lua_number;
 begin
   g := TPicture.Create;
@@ -922,17 +922,28 @@ begin
     g.LoadFromStream(ms);
     case lua_gettop(LS) of
       6: begin
-        LuaPrint.FCanvas.StretchDraw(
-         Rect(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
-              zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4))),
-         g.Graphic);
+        x1 := zx(lua_tointeger(LS, 1));
+        y1 := zy(lua_tointeger(LS, 2));
+        x2 := zx(lua_tointeger(LS, 3));
+        y2 := zy(lua_tointeger(LS, 4));
+        n := Abs(y2 - y1) / g.Height;
+        i := Trunc(g.Width * n);
+        if i < Abs(x2 - x1) then begin
+          x2 := x1 + i;
+          y2 := y1 + Trunc(g.Height * n);
+        end else begin
+          n := Abs(x2 - x1) / g.Width;
+          x2 := x1 + Trunc(g.Width  * n);
+          y2 := y1 + Trunc(g.Height * n);
+        end;
+        LuaPrint.FCanvas.StretchDraw(Rect(x1, y1, x2, y2), g.Graphic);
       end;
       5: begin
-        x := zx(lua_tointeger(LS, 1));
-        y := zy(lua_tointeger(LS, 2));
+        x1 := zx(lua_tointeger(LS, 1));
+        y1 := zy(lua_tointeger(LS, 2));
         n := lua_tonumber(LS, 3);
         LuaPrint.FCanvas.StretchDraw(
-         Rect(x, y, x + Trunc(g.Width * n), y + Trunc(g.Height * n)),
+         Rect(x1, y1, x1 + Trunc(g.Width * n), y1 + Trunc(g.Height * n)),
          g.Graphic);
       end;
       4: begin

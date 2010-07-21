@@ -72,6 +72,8 @@ object Form1: TForm1
       'DrawFrame()'
       'P.DrawImage(0, 0, 10000, 10000, "cheetah.jpg")'
       'P.DrawImage(7000, 1000, 0.15, "paw.png")'
+      'P.Brush.Style = "bsClear"'
+      'P.Rectangle(0, 0, 10000, 10000)'
       'P.Pen.Style = "psDot"'
       'P.brush.style = "bsClear"'
       'P.line(0, 2000, P.pageWidth, 2000)'
