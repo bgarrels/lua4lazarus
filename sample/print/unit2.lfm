@@ -90,12 +90,11 @@ object FormPreview: TFormPreview
   end
   object ScrollBox: TScrollBox
     Left = 0
-    Height = 421
+    Height = 165
     Top = 29
-    Width = 632
-    Align = alClient
-    ClientHeight = 417
-    ClientWidth = 628
+    Width = 184
+    ClientHeight = 161
+    ClientWidth = 180
     TabOrder = 0
     TabStop = True
     OnMouseDown = FormMouseDown

@@ -77,6 +77,7 @@ begin
   ScrollBox.OnMouseWheelDown:= @FormMouseWheelDown;
   ScrollBox.OnMouseWheelUp:= @FormMouseWheelUp;
   ScrollBox.DoubleBuffered := True;
+  ScrollBox.Align:=alClient;
 end;
 
 procedure TFormPreview.FormShow(Sender: TObject);
