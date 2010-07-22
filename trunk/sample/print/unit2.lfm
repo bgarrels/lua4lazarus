@@ -98,13 +98,15 @@ object FormPreview: TFormPreview
     ClientWidth = 628
     TabOrder = 0
     TabStop = True
+    OnMouseDown = FormMouseDown
     OnPaint = ScrollBoxPaint
     object Image: TImage
       Left = 0
       Height = 41
-      Top = 2
+      Top = 0
       Width = 42
       DragCursor = 1
+      OnMouseDown = FormMouseDown
     end
   end
   object PMenu: TPopupMenu

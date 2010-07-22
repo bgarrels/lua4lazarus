@@ -76,6 +76,7 @@ begin
   Image.OnMouseWheelUp:= @FormMouseWheelUp;
   ScrollBox.OnMouseWheelDown:= @FormMouseWheelDown;
   ScrollBox.OnMouseWheelUp:= @FormMouseWheelUp;
+  ScrollBox.DoubleBuffered := True;
 end;
 
 procedure TFormPreview.FormShow(Sender: TObject);
