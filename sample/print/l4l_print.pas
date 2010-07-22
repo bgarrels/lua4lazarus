@@ -578,22 +578,17 @@ begin
   case lua_gettop(LS) of
     5: begin
       LuaPrint.AddOrder(
-       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%s)',
+       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,1,%d,%s)',
        [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
         LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
         LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
     end;
-    4: begin
+    6: begin
       LuaPrint.AddOrder(
-       Format(PRUN_NAME + '.drawimage(%d,%d,%f,%d,%s)',
+       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%d,%s)',
        [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
-        lua_tonumber(LS, 3),
-        LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
-    end;
-    3: begin
-      LuaPrint.AddOrder(
-       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%s)',
-       [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+        LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
+        LP2DP(lua_tointeger(LS, 5)),
         LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
     end;
   end;
@@ -920,38 +915,23 @@ begin
     ms.Position:= 0;
     //g.LoadFromStreamWithFileExt(ms, lua_tostring(LS, -1));
     g.LoadFromStream(ms);
-    case lua_gettop(LS) of
-      6: begin
-        x1 := zx(lua_tointeger(LS, 1));
-        y1 := zy(lua_tointeger(LS, 2));
-        x2 := zx(lua_tointeger(LS, 3));
-        y2 := zy(lua_tointeger(LS, 4));
-        n := Abs(y2 - y1) / g.Height;
-        i := Trunc(g.Width * n);
-        if i < Abs(x2 - x1) then begin
-          x2 := x1 + i;
-          y2 := y1 + Trunc(g.Height * n);
-        end else begin
-          n := Abs(x2 - x1) / g.Width;
-          x2 := x1 + Trunc(g.Width  * n);
-          y2 := y1 + Trunc(g.Height * n);
-        end;
-        LuaPrint.FCanvas.StretchDraw(Rect(x1, y1, x2, y2), g.Graphic);
-      end;
-      5: begin
-        x1 := zx(lua_tointeger(LS, 1));
-        y1 := zy(lua_tointeger(LS, 2));
-        n := lua_tonumber(LS, 3) * LuaPrint.FZoom / 100;
-        LuaPrint.FCanvas.StretchDraw(
-         Rect(x1, y1, x1 + Trunc(g.Width * n), y1 + Trunc(g.Height * n)),
-         g.Graphic);
-      end;
-      4: begin
-        LuaPrint.FCanvas.Draw(
-         zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
-         g.Graphic);
+    x1 := zx(lua_tointeger(LS, 1));
+    y1 := zy(lua_tointeger(LS, 2));
+    x2 := zx(lua_tointeger(LS, 3));
+    y2 := zy(lua_tointeger(LS, 4));
+    if lua_tointeger(LS, 5) <> 0 then begin
+      n := Abs(y2 - y1) / g.Height;
+      i := Trunc(g.Width * n);
+      if i < Abs(x2 - x1) then begin
+        x2 := x1 + i;
+        y2 := y1 + Trunc(g.Height * n);
+      end else begin
+        n := Abs(x2 - x1) / g.Width;
+        x2 := x1 + Trunc(g.Width  * n);
+        y2 := y1 + Trunc(g.Height * n);
       end;
     end;
+    LuaPrint.FCanvas.StretchDraw(Rect(x1, y1, x2, y2), g.Graphic);
   finally
     g.Free;
   end;
