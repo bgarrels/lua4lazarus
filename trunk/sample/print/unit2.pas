@@ -48,6 +48,7 @@ type
     DragPoint: TPoint;
     DragImage, MovePage: boolean;
     procedure DoSetZoomText({%H-}Data: PtrInt);
+    procedure SetPageInfo;
   public
     { public declarations }
     LP: TLuaPrint;
@@ -85,7 +86,7 @@ begin
   if i > 0 then begin
     ScrollBar.SetParams(1, 1, i);
     ScrollBar.Enabled:= i > 1;
-    PanelPage.Caption:= Format('Page  1/%2d', [i]);
+    SetPageInfo;
   end else begin
     Panel1.Visible:= False;
     Image.Visible:= False;
@@ -284,7 +285,7 @@ end;
 
 procedure TFormPreview.ScrollBarChange(Sender: TObject);
 begin
-  PanelPage.Caption:= Format('Page %2d/%2d', [ScrollBar.Position, LP.PageCount]);
+  SetPageInfo;
   ComboZoomSelect(nil);
 end;
 
@@ -308,6 +309,15 @@ procedure TFormPreview.DoSetZoomText(Data: PtrInt);
 begin
   ComboZoom.Text:= IntToStr(Zoom) + '%';
   ComboZoom.SelectAll;
+end;
+
+procedure TFormPreview.SetPageInfo;
+var
+  s: string;
+begin
+  s:= Format('Page %2d/%2d', [ScrollBar.Position, LP.PageCount]);
+  PanelPage.Caption:= s;
+  ScrollBar.Hint:= s;
 end;
 
 end.
