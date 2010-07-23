@@ -578,17 +578,9 @@ begin
   case lua_gettop(LS) of
     5: begin
       LuaPrint.AddOrder(
-       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,1,%d,%s)',
+       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%s)',
        [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
         LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
-        LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
-    end;
-    6: begin
-      LuaPrint.AddOrder(
-       Format(PRUN_NAME + '.drawimage(%d,%d,%d,%d,%d,%d,%s)',
-       [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
-        LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
-        LP2DP(lua_tointeger(LS, 5)),
         LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
     end;
   end;
@@ -919,17 +911,15 @@ begin
     y1 := zy(lua_tointeger(LS, 2));
     x2 := zx(lua_tointeger(LS, 3));
     y2 := zy(lua_tointeger(LS, 4));
-    if lua_tointeger(LS, 5) <> 0 then begin
-      n := Abs(y2 - y1) / g.Height;
-      i := Trunc(g.Width * n);
-      if i < Abs(x2 - x1) then begin
-        x2 := x1 + i;
-        y2 := y1 + Trunc(g.Height * n);
-      end else begin
-        n := Abs(x2 - x1) / g.Width;
-        x2 := x1 + Trunc(g.Width  * n);
-        y2 := y1 + Trunc(g.Height * n);
-      end;
+    n := Abs(y2 - y1) / g.Height;
+    i := Trunc(g.Width * n);
+    if i < Abs(x2 - x1) then begin
+      x2 := x1 + i;
+      y2 := y1 + Trunc(g.Height * n);
+    end else begin
+      n := Abs(x2 - x1) / g.Width;
+      x2 := x1 + Trunc(g.Width  * n);
+      y2 := y1 + Trunc(g.Height * n);
     end;
     LuaPrint.FCanvas.StretchDraw(Rect(x1, y1, x2, y2), g.Graphic);
   finally
