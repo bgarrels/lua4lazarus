@@ -147,8 +147,8 @@ begin
       end;
     end;
   finally
-    msg := ''; // For eco.
     finished:= True;
+    msg := ''; // For eco.
     lua_close(L);
     Synchronize(@Last);
   end;
