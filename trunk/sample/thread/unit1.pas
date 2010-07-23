@@ -13,7 +13,6 @@ type
 
   TForm1 = class(TForm)
     Button1: TButton;
-    Label1: TLabel;
     Memo1: TMemo;
     Memo2: TMemo;
     procedure Button1Click(Sender: TObject);
@@ -59,12 +58,12 @@ type
   TLuaMyObject = class(TLuaObject)
   private
     procedure DoPrint;
-    procedure DoSetLabel;
+    procedure DoSetCaption;
   protected
   public
   published
     function l4l_print: integer;
-    function l4l_SetLabel: integer;
+    function l4l_SetCaption: integer;
   end;
 
 function Alloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t) : Pointer; cdecl;
@@ -190,9 +189,9 @@ begin
   Form1.Memo2.SelLength:= 0;
 end;
 
-procedure TLuaMyObject.DoSetLabel;
+procedure TLuaMyObject.DoSetCaption;
 begin
-  Form1.Label1.Caption:= lua_tostring(LS, 1);
+  Form1.Caption:= lua_tostring(LS, 1);
 end;
 
 function TLuaMyObject.l4l_print: integer;
@@ -201,9 +200,9 @@ begin
   Result := 0;
 end;
 
-function TLuaMyObject.l4l_SetLabel: integer;
+function TLuaMyObject.l4l_SetCaption: integer;
 begin
-  TLuaThread(Form1.FThread).Sync(@DoSetLabel);
+  TLuaThread(Form1.FThread).Sync(@DoSetCaption);
   Result := 0;
 end;
 
