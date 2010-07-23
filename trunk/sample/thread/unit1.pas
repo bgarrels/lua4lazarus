@@ -13,6 +13,7 @@ type
 
   TForm1 = class(TForm)
     Button1: TButton;
+    Label1: TLabel;
     Memo1: TMemo;
     Memo2: TMemo;
     procedure Button1Click(Sender: TObject);
@@ -191,7 +192,7 @@ end;
 
 procedure TLuaMyObject.DoSetCaption;
 begin
-  Form1.Caption:= lua_tostring(LS, 1);
+  Form1.Label1.Caption:= lua_tostring(LS, 1);
 end;
 
 function TLuaMyObject.l4l_print: integer;
