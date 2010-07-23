@@ -1,4 +1,4 @@
-program sample1;
+program project1;
 
 {$mode objfpc}{$H+}
 
@@ -7,7 +7,8 @@ uses
   cthreads,
   {$ENDIF}{$ENDIF}
   Interfaces, // this includes the LCL widgetset
-  Forms, dbflaz, sample1_Unit1;
+  Forms, Unit1
+  { you can add units after this };
 
 {$R *.res}
 
