@@ -51,6 +51,7 @@ type
   public
     property Terminated;
     procedure Sync(AMethod: TThreadMethod);
+    constructor Create(aL: plua_state); overload;
     destructor Destroy; override;
   end;
 
@@ -96,7 +97,7 @@ begin
     Exit;
   end;
 
-  // Run thread.
+  // Start thread.
   Memo2.Clear;
   L:= lua_newstate(@alloc, nil);
   lua_sethook(L, @hook, LUA_MASKLINE, 0);
@@ -112,10 +113,7 @@ begin
   end;
 
   if Assigned(FThread) then FThread.Free;
-  FThread := TLuaThread.Create(True);
-  TLuaThread(FThread).L := L;
-  FThread.FreeOnTerminate:= False;
-  FThread.Resume;
+  FThread := TLuaThread.Create(L);
   Form1.Button1.Caption:= 'Stop';
 end;
 
@@ -160,6 +158,13 @@ begin
   Synchronize(AMethod);
 end;
 
+constructor TLuaThread.Create(aL: plua_state);
+begin
+  L := aL;
+  FreeOnTerminate:= False;
+  inherited Create(False);
+end;
+
 procedure TLuaThread.ShowMsg;
 begin
   Form1.Memo2.Lines.Add(msg);
@@ -169,7 +174,7 @@ end;
 
 procedure TLuaThread.Last;
 begin
-  Form1.Button1.Caption:= 'Run';
+  Form1.Button1.Caption:= 'Start';
 end;
 
 destructor TLuaThread.Destroy;
