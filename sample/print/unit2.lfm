@@ -85,6 +85,8 @@ object FormPreview: TFormPreview
       Anchors = [akTop, akRight]
       Caption = '&Print...'
       OnClick = ButtonPrintClick
+      ParentShowHint = False
+      ShowHint = True
       TabOrder = 3
     end
   end

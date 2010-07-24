@@ -45,7 +45,14 @@ procedure TForm1.FormCreate(Sender: TObject);
 var
   i: integer;
 begin
-  Button1.Enabled:= (Printer.Printers.Count > 0) and Printer.CanPrint;
+  if Printer.Printers.Count <= 0 then begin
+    Button1.Enabled := False;
+    Button2.Enabled := False;
+    Button3.Enabled := False;
+    ComboBox1.Enabled := False;
+    Exit;
+  end;
+
   for i := 0 to Printer.Printers.Count-1 do begin
     ComboBox1.Items.Add(AnsiToUTF8(Printer.Printers[i]));  // Why needs AnsiToUTF8?
   end;
