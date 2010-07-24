@@ -59,7 +59,7 @@ var
 
 implementation
 uses
-  LCLType, LCLIntf;
+  Printers, LCLType, LCLIntf;
 
 {$R *.lfm}
 
@@ -78,6 +78,7 @@ begin
   ScrollBox.OnMouseWheelUp:= @FormMouseWheelUp;
   ScrollBox.DoubleBuffered := True;
   ScrollBox.Align:=alClient;
+  ButtonPrint.Hint := 'Print with ' + AnsiToUTF8(Printer.Printers[Printer.PrinterIndex]);
 end;
 
 procedure TFormPreview.FormShow(Sender: TObject);
