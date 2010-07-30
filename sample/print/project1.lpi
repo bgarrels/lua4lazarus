@@ -40,7 +40,7 @@
         <PackageName Value="LCL"/>
       </Item2>
     </RequiredPackages>
-    <Units Count="4">
+    <Units Count="5">
       <Unit0>
         <Filename Value="project1.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -65,6 +65,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="l4l_print"/>
       </Unit3>
+      <Unit4>
+        <Filename Value="l4l_pdf.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="l4l_pdf"/>
+      </Unit4>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

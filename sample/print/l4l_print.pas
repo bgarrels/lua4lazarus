@@ -1,11 +1,13 @@
+unit l4l_print;
 {
   Lua4Lazalus
 
     sample:
 
     License: New BSD
+      Copyright(c)2010- Malcome@Japan All rights reserved.
+
 }
-unit l4l_print;
 
 {$mode objfpc}{$H+}
 
@@ -40,7 +42,6 @@ type
     function DP2LP(dp: integer): integer;
     function LP2DP(lp: integer): integer;
     function z(i: integer): integer;
-    procedure AddOrder(const s: string);
   public
     constructor Create(L : Plua_State);
     destructor Destroy; override;
@@ -58,6 +59,7 @@ type
     property PaperSize: TSize read GetPaperSize;
     property PageSize: TSize read GetPageSize;
     property DPI: integer read FDPI;
+    procedure AddOrder(const s: string);
   end;
 
   { TLuaPrintObject }
@@ -69,17 +71,17 @@ type
   TLuaPrintObject  = class(TLuaObject)
   private
     FUnits: char;
-    function DP2LP(dp: integer): integer;
     function GetBrushObject: TLuaBrushObject;
     function GetFontObject: TLuaFontObject;
     function GetPageHeight: integer;
     function GetPageNumber: integer;
     function GetPageWidth: integer;
     function GetPenObject: TLuaPenObject;
-    function LP2DP(lp: integer): integer;
   protected
-    LuaPrint: TLuaPrint;
   public
+    LuaPrint: TLuaPrint;
+    function DP2LP(dp: integer): integer;
+    function LP2DP(lp: integer): integer;
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
   published
@@ -89,6 +91,7 @@ type
     function l4l_TextWidth: integer;
     function l4l_TextHeight: integer;
     function l4l_DrawImage: integer;
+    function l4l_DrawPDF: integer;
     function l4l_NewPage: integer;
     property l4l_pageWidth: integer read GetPageWidth;
     property l4l_pageHeight: integer read GetPageHeight;
@@ -168,6 +171,16 @@ type
     property l4l_style: string read GetStyle write SetStyle;
   end;
 
+implementation
+uses
+  LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf;
+
+const
+  MM_P_INCH = 2540;
+  PRUN_NAME = 'P_';
+
+type
+
   { TLuaPrintRunObject }
 
   TLuaPrintRunObject  = class(TLuaObject)
@@ -184,6 +197,7 @@ type
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
+    function l4l_DrawPoly: integer;
     function l4l_DrawImage: integer;
     function l4l_font_color: integer;
     function l4l_font_name: integer;
@@ -197,14 +211,6 @@ type
     function l4l_brush_color: integer;
     function l4l_brush_style: integer;
   end;
-
-implementation
-uses
-  LCLType, LCLIntf, typinfo, lauxlib;
-
-const
-  MM_P_INCH = 2540;
-  PRUN_NAME = 'P_';
 
 { TLuaPrint }
 
@@ -442,7 +448,7 @@ begin
   Result := Result + '"';
 end;
 
-{ TLuaPrintObject0 }
+{ TLuaPrintObject }
 
 function TLuaPrintObject.DP2LP(dp: integer): integer;
 var
@@ -582,6 +588,25 @@ begin
        [LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
         LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)),
         LuaPrint.FResList.Count-1, str_param(ExtractFileExt(fn))]));
+    end;
+  end;
+  Result := 0;
+end;
+
+function TLuaPrintObject.l4l_DrawPDF: integer;
+var
+  fn: string;
+  ms: TMemoryStream;
+begin
+  fn := lua_tostring(LS, -1);
+  ms := TMemoryStream.Create;
+  ms.LoadFromFile(fn);
+  LuaPrint.FResList.Add(ms);
+  case lua_gettop(LS) of
+    5: begin
+      DrawPDF(ms, Self,
+       LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+       LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
     end;
   end;
   Result := 0;
@@ -892,6 +917,19 @@ begin
      zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
   end;
   Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_DrawPoly: integer;
+var
+  i, c: integer;
+  p: array [1..100] of TPoint;
+begin
+  c := lua_gettop(LS);
+  for i := 1 to c div 2 do begin
+    if i > 100 then break;
+    p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+  end;
+  LuaPrint.FCanvas.Polygon(@p, c div 2);
 end;
 
 function TLuaPrintRunObject.l4l_DrawImage: integer;
