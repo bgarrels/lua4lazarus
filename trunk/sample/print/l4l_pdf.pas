@@ -29,22 +29,22 @@ procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; x1, y1, x2, y2: integer
 var
   PageW, PageH, RateW, RateH, Rate: double;
 
-  procedure translatePage(AInput: string);
-
-    function TokenFloat(var s: string): double;
-    var
-      i: integer;
-    begin
-      i := Pos(' ', s);
-      if i > 0 then begin
-        Result := StrToFloat(Trim(Copy(s, 1, i-1)));
-        Delete(s, 1, i);
-      end else begin
-        Result := StrToFloat(Trim(s));
-        s := '';
-      end;
+  function TokenFloat(var s: string): double;
+  var
+    i: integer;
+  begin
+    i := 1;
+    while (i <= Length(s)) and (s[i] in ['0'..'9','.','-']) do Inc(i);
+    if i > 1 then begin
+      Result := StrToFloat(Trim(Copy(s, 1, i-1)));
+      Delete(s, 1, i);
+    end else begin
+      Result := 0;
+      Delete(s, 1, 1);
     end;
+  end;
 
+  procedure DrawPage(cmd: string);
   var
     sl, params: TStringList;
     i, j: integer;
@@ -53,7 +53,7 @@ var
   begin
     sl := TStringList.Create;
     try
-      sl.Text := AInput;
+      sl.Text := cmd;
       params := TStringList.Create;
       try
         for i := 0 to sl.Count-1 do begin
@@ -135,10 +135,9 @@ const
   ZBUF_LEN = 10000;
 var
   i, p1, p2, len, page: integer;
-  s, s1, s2, obj, cmd: string;
+  s, s1, obj, cmd: string;
   z: TZStream;
-  zout: PByte;
-  d: double;
+  flate: boolean;
 begin
   SetLength(s, stream.Size);
   stream.Position:= 0;
@@ -176,51 +175,17 @@ begin
           PageH := 0;
           p1 := Pos('/CropBox[', s1);
           if p1 > 0 then begin
-            i := p1+9;
-            s2 := '';
-            while i <=  Length(s1) do begin
-              if s1[i] in ['0'..'9','.','-'] then begin
-                s2 := s2 + s1[i];
-              end else
-                Break;
-              Inc(i);
-            end;
+            Delete(s1, 1, p1+8);
+            TokenFloat(s1);
+            TokenFloat(s1);
+            PageW := TokenFloat(s1);
+            PageH := TokenFloat(s1);
 
-            Inc(i);
-            s2 := '';
-            while i <=  Length(s1) do begin
-              if s1[i] in ['0'..'9','.','-'] then begin
-                s2 := s2 + s1[i];
-              end else
-                Break;
-              Inc(i);
-            end;
-
-            Inc(i);
-            s2 := '';
-            while i <=  Length(s1) do begin
-              if s1[i] in ['0'..'9','.','-'] then begin
-                s2 := s2 + s1[i];
-              end else
-                Break;
-              Inc(i);
-            end;
-            PageW := StrToFloat(s2);
             if PageW <> 0 then begin
               RateW := (x2 - x1) / PageW;
             end else
               RateW := 1;
 
-            Inc(i);
-            s2 := '';
-            while i <=  Length(s1) do begin
-              if s1[i] in ['0'..'9','.','-'] then begin
-                s2 := s2 + s1[i];
-              end else
-                Break;
-              Inc(i);
-            end;
-            PageH := StrToFloat(s2);
             if PageH <> 0 then begin
               RateH := (y2 - y1) / PageH;
             end else
@@ -254,19 +219,13 @@ begin
       Delete(s, 1, p1+Length(obj)+5);
       p2 := Pos('endobj', s);
       if p2 > 0 then s := Trim(Copy(s, 1, p2-1));
+
+      flate := Pos('/FlateDecode', s) > 0;
       len := 0;
       p1:= Pos('/Length', s);
       if p1 > 0 then begin
-        i := p1+8;
-        s1:= '';
-        while i <=  Length(s) do begin
-          if s[i] in ['0'..'9'] then begin
-            s1 := s1 + s[i];
-          end else
-            Break;
-          Inc(i);
-        end;
-        len := StrToInt(s1);
+        Delete(s, 1, p1+7);
+        len:= Trunc(TokenFloat(s));
       end;
       if len > 0 then begin
         p1 := Pos('stream', s);
@@ -276,25 +235,22 @@ begin
             Inc(i);
           end;
         end;
-        if Pos('/FlateDecode', s) > 0 then begin
+        if flate then begin
           z.next_in := PByte(@s[p1+6+i]);
           z.avail_in := len;
           if inflateInit(z) = Z_OK then begin
             try
-              GetMem(zout, ZBUF_LEN);
-              try
-                cmd := '';
-                while True do begin
-                  FillChar(zout^, ZBUF_LEN, 0);
-                  z.next_out := zout;
-                  z.avail_out := ZBUF_LEN-1;
-                  if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
-                  cmd := cmd + PChar(zout);
-                end;
-                cmd := cmd + PChar(zout);
-              finally
-                FreeMem(zout);
+              cmd := '';
+              SetLength(s1, ZBUF_LEN);
+              while True do begin
+                z.next_out := PByte(PChar(s1));
+                z.avail_out := ZBUF_LEN;
+                if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
+                if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
+                cmd := cmd + PChar(s1);
               end;
+              if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
+              cmd := cmd + PChar(s1);
             finally
               inflateEnd(z);
             end;
@@ -302,7 +258,7 @@ begin
         end else begin
           cmd := Copy(s, p1+6+i, len);
         end;
-        translatePage(cmd);
+        DrawPage(cmd);
       end;
     end;
   end;
