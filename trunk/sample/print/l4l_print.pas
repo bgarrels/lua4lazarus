@@ -197,7 +197,8 @@ type
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
     function l4l_Line: integer;
-    function l4l_DrawPoly: integer;
+    function l4l_Polygon: integer;
+    function l4l_Polyline: integer;
     function l4l_DrawImage: integer;
     function l4l_font_color: integer;
     function l4l_font_name: integer;
@@ -919,7 +920,7 @@ begin
   Result := 0;
 end;
 
-function TLuaPrintRunObject.l4l_DrawPoly: integer;
+function TLuaPrintRunObject.l4l_Polygon: integer;
 var
   i, c: integer;
   p: array [1..100] of TPoint;
@@ -930,6 +931,19 @@ begin
     p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
   end;
   LuaPrint.FCanvas.Polygon(@p, c div 2);
+end;
+
+function TLuaPrintRunObject.l4l_Polyline: integer;
+var
+  i, c: integer;
+  p: array [1..100] of TPoint;
+begin
+  c := lua_gettop(LS);
+  for i := 1 to c div 2 do begin
+    if i > 100 then break;
+    p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+  end;
+  LuaPrint.FCanvas.Polyline(@p, c div 2);
 end;
 
 function TLuaPrintRunObject.l4l_DrawImage: integer;
