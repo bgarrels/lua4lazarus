@@ -60,6 +60,7 @@ type
     property PageSize: TSize read GetPageSize;
     property DPI: integer read FDPI;
     procedure AddOrder(const s: string);
+    property Canvas: TCanvas read FCanvas;
   end;
 
   { TLuaPrintObject }
@@ -211,6 +212,9 @@ type
     function l4l_pen_width: integer;
     function l4l_brush_color: integer;
     function l4l_brush_style: integer;
+    function l4l_SaveHandleState: integer;
+    function l4l_RestoreHandleState: integer;
+    function l4l_SetClipRect: integer;
   end;
 
 { TLuaPrint }
@@ -602,7 +606,8 @@ begin
   fn := lua_tostring(LS, -1);
   ms := TMemoryStream.Create;
   ms.LoadFromFile(fn);
-  LuaPrint.FResList.Add(ms);
+  LuaPrint.FCanvas.SaveHandleState;
+  LuaPrint.AddOrder(PRUN_NAME + '.SaveHandleState()');
   case lua_gettop(LS) of
     5: begin
       DrawPDF(ms, Self,
@@ -610,6 +615,8 @@ begin
        LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
     end;
   end;
+  LuaPrint.AddOrder(PRUN_NAME + '.RestoreHandleState()');
+  LuaPrint.FCanvas.RestoreHandleState;
   Result := 0;
 end;
 
@@ -924,13 +931,16 @@ function TLuaPrintRunObject.l4l_Polygon: integer;
 var
   i, c: integer;
   p: array [1..100] of TPoint;
+  winding: boolean;
 begin
   c := lua_gettop(LS);
   for i := 1 to c div 2 do begin
     if i > 100 then break;
     p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
   end;
-  LuaPrint.FCanvas.Polygon(@p, c div 2);
+  winding := False;
+  if c mod 2 = 1 then winding := lua_toboolean(LS, c);
+  LuaPrint.FCanvas.Polygon(@p, c div 2, winding);
 end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
@@ -1046,6 +1056,23 @@ function TLuaPrintRunObject.l4l_brush_style: integer;
 begin
   LuaPrint.FCanvas.Brush.Style := TBrushStyle(lua_tointeger(LS, 1));
   Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_SaveHandleState: integer;
+begin
+  LuaPrint.FCanvas.SaveHandleState;
+end;
+
+function TLuaPrintRunObject.l4l_RestoreHandleState: integer;
+begin
+  LuaPrint.FCanvas.RestoreHandleState;
+end;
+
+function TLuaPrintRunObject.l4l_SetClipRect: integer;
+begin
+  LuaPrint.FCanvas.Region.ClipRect :=
+   Rect(lua_tointeger(LS, 1), lua_tointeger(LS, 2),
+        lua_tointeger(LS, 3), lua_tointeger(LS, 4));
 end;
 
 end.

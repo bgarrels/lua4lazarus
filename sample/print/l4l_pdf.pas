@@ -44,6 +44,22 @@ var
     end;
   end;
 
+  function TokenFloat2(var p: PChar): double;
+  var
+    i, l: integer;
+  begin
+    i := 0;
+    l := strlen(p);
+    while (i < l) and ((p+i)^ in ['0'..'9','.','-']) do Inc(i);
+    if i > 0 then begin
+      Result := StrToFloat(Copy(p, 1, i));
+      while (i < l) and ((p+i)^ in [#1..' ']) do Inc(i);
+      Inc(p, i);
+    end else begin
+      Result := 0;
+    end;
+  end;
+
   procedure DrawPage(cmd: string);
   var
     sl, params: TStringList;
@@ -54,6 +70,7 @@ var
     sl := TStringList.Create;
     try
       sl.Text := cmd;
+      sl.SaveToFile('2.txt');
       params := TStringList.Create;
       try
         for i := 0 to sl.Count-1 do begin
@@ -109,10 +126,12 @@ var
           end else if cm = 'G' then begin
             x1 := TokenFloat(s);
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)', [0]));
+            LPO.LuaPrint.Canvas.Pen.Color:= 0;
           end else if cm = 'g' then begin
             x1 := TokenFloat(s);
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_color(%d)', [0]));
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)', [Ord(bsSolid)]));
+            //LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)', [Ord(bsSolid)]));
+            LPO.LuaPrint.Canvas.Brush.Color:= 0;
           ////////////////////////////////
           end else if cm = 'n' then begin
             // End the path object without filling or stroking it.
@@ -120,7 +139,7 @@ var
           end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
            (cm = 'f*') or (cm = 'b*') then begin
 
-            if (cm = 's') then begin
+            if (cm = 's') or (cm = 'b') then begin
               params[params.Count-1] :=  params[params.Count-1] +
                Format(',%d,%d',
                [Trunc(sx*Rate), Trunc(sy*Rate)]);
@@ -136,9 +155,21 @@ var
                 end;
                 else begin
                   if (cm = 's') or (cm = 'S') then begin
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)', [params[j]]));
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
+                     [params[j]]));
+                  end else if (cm = 'b') or (cm = 'b*')
+                   or (cm = 'B') or (cm = 'B*') then begin
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
+                     [params[j], Integer((cm = 'b') or (cm = 'B'))]));
                   end else begin
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)', [params[j]]));
+                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.SaveHandleState()');
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
+                     [Integer(psSolid)]));
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                     [LPO.LuaPrint.Canvas.Brush.Color]));
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)',
+                     [params[j]]));
+                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.RestoreHandleState()');
                   end;
                 end;
               end;
@@ -154,41 +185,59 @@ var
     end;
   end;
 
+  function mempos(str1, str2: PChar; l: integer) : PChar;
+  var
+    i, j, l2: integer;
+  begin
+    l2 := strlen(str2);
+    for i := 0 to l-1 do begin
+      j := 0;
+      while ((j < l2) and (i+j < l) and ((str1+i+j)^ = (str2+j)^)) do Inc(j);
+      if j = l2 then begin
+        Result := str1 + i;
+        Exit;
+      end;
+    end;
+    Result := nil;
+  end;
+
 const
   ZBUF_LEN = 10000;
 var
   i, p1, p2, len, page: integer;
-  s, s1, obj, cmd: string;
+  src, s, s1, obj, cmd: string;
+  sp, sp1, sp2: PChar;
   z: TZStream;
   flate: boolean;
 begin
-  SetLength(s, stream.Size);
+  SetLength(src, stream.Size);
   stream.Position:= 0;
-  stream.ReadBuffer(s[1], stream.Size);
+  stream.ReadBuffer(src[1], stream.Size);
+  sp := PChar(src);
   page := 1;
   while True do begin
-    p1 := Pos('obj', s);
-    if p1 > 0 then begin
-      p2 := Pos('endobj', s);
-      if p2 > 0 then begin
-        s1 := Trim(Copy(s, p1+3, p2-p1-3));
-        Delete(s, 1, p2+5);
+    sp1 := mempos(sp, 'obj', Length(src)-Integer(sp-PChar(src)));
+    if sp1 <> nil then begin
+      sp2 := mempos(sp, 'endobj', Length(src)-Integer(sp-PChar(src)));
+      if sp2 <> nil then begin
+        s := Trim(Copy(sp1+3, 1, sp2-sp1-3));
+        sp := sp2 + 6;
       end else begin
-        s1 := Trim(Copy(s, p1+3, Length(s)));
-        s := '';
+        s := Trim(Copy(sp1+3, 1, Length(src)));
+        sp := PChar(src) + Length(src);
       end;
     end else
       Break;
 
-    p1 := Pos('/Type/Page', s1);
+    p1 := Pos('/Type/Page', s);
     if p1 > 0 then begin
-      p1 := Pos('/Contents', s1);
+      p1 := Pos('/Contents', s);
       if p1 > 0 then begin
         i := p1+10;
         obj := '';
-        while i <=  Length(s1) do begin
-          if s1[i] in ['0'..'9'] then begin
-            obj := obj + s1[i];
+        while i <=  Length(s) do begin
+          if s[i] in ['0'..'9'] then begin
+            obj := obj + s[i];
           end else
             Break;
           Inc(i);
@@ -196,13 +245,13 @@ begin
         if Page = 1 then begin
           PageW := 0;
           PageH := 0;
-          p1 := Pos('/CropBox[', s1);
-          if p1 > 0 then begin
-            Delete(s1, 1, p1+8);
-            TokenFloat(s1);
-            TokenFloat(s1);
-            PageW := TokenFloat(s1);
-            PageH := TokenFloat(s1);
+          sp1 := strpos(PChar(s), '/CropBox[');
+          if sp1 <> nil then begin
+            Inc(sp1, 9);
+            TokenFloat2(sp1);
+            TokenFloat2(sp1);
+            PageW := TokenFloat2(sp1);
+            PageH := TokenFloat2(sp1);
 
             if PageW <> 0 then begin
               RateW := (x2 - x1) / PageW;
@@ -225,41 +274,35 @@ begin
   end; // while
 
   if obj <> '' then begin
-    SetLength(s, stream.Size);
-    stream.Position:= 0;
-    stream.ReadBuffer(s[1], stream.Size);
-    p1 := -1;
-    while p1 = -1 do begin
-      p1 := Pos(obj + ' 0 obj', s);
-      if (p1 > 0) and (s[p1-1] in ['0'..'9']) then begin
-        Delete(s, 1, p1+Length(obj)+5);
-        p2 := Pos('endobj', s);
-        if p2 > 0 then Delete(s, 1, p2+5);
-        p1 := -1;
+    sp := PChar(src);
+    sp1 := PChar(-1);
+    while sp1 = PChar(-1) do begin
+      sp1 := mempos(sp, PChar(obj + ' 0 obj'), Length(src)-Integer(sp-PChar(src)));
+      if (sp1 <> nil) and ((sp1-1)^ in ['0'..'9']) then begin
+        sp := sp1 + Length(obj) + 6;
+        sp1 := mempos(sp, 'endobj', Length(src)-Integer(sp-PChar(src)));
+        if sp1 <> nil then sp := sp1 + 6;
+        sp1 := PChar(-1);
       end;
     end;
-    if p1 > 0 then begin
-      Delete(s, 1, p1+Length(obj)+5);
-      p2 := Pos('endobj', s);
-      if p2 > 0 then s := Trim(Copy(s, 1, p2-1));
-
-      flate := Pos('/FlateDecode', s) > 0;
+    if (sp1 <> nil) and (sp1 <> PChar(-1)) then begin
+      sp := sp1 + Length(obj) + 6;
+      flate := Pos('/FlateDecode', sp) > 0;
       len := 0;
-      p1:= Pos('/Length', s);
-      if p1 > 0 then begin
-        Delete(s, 1, p1+7);
-        len:= Trunc(TokenFloat(s));
+      sp1:= strpos(sp, '/Length');
+      if sp1 <> nil then begin
+        Inc(sp1, 8);
+        len:= Trunc(TokenFloat2(sp1));
       end;
       if len > 0 then begin
-        p1 := Pos('stream', s);
-        if p1 > 0 then begin
-          i := 0;
-          while (p1+6+i <= Length(s)) and (s[p1+6+i] in [#$0d, #$0a]) do begin
-            Inc(i);
-          end;
+        sp := strpos(sp, 'stream');
+        if sp <> nil then begin
+          Inc(sp, 6);
+          while (Integer(sp-PChar(src)) < Length(src))
+           and (sp^ in [#$0d, #$0a]) do Inc(sp);
         end;
         if flate then begin
-          z.next_in := PByte(@s[p1+6+i]);
+          z.next_in := PByte(sp);
           z.avail_in := len;
           if inflateInit(z) = Z_OK then begin
             try
@@ -279,7 +322,7 @@ begin
             end;
           end;
         end else begin
-          cmd := Copy(s, p1+6+i, len);
+          cmd := Copy(sp, 1, len);
         end;
         DrawPage(cmd);
       end;
