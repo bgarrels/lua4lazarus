@@ -70,7 +70,6 @@ var
     sl := TStringList.Create;
     try
       sl.Text := cmd;
-      sl.SaveToFile('2.txt');
       params := TStringList.Create;
       try
         for i := 0 to sl.Count-1 do begin
