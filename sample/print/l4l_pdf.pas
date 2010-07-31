@@ -106,8 +106,28 @@ var
               Trunc(x1*Rate), Trunc(y1*Rate)]));
             params.Objects[params.Count-1] := TObject(4);
           ////////////////////////////////
+          end else if cm = 'G' then begin
+            x1 := TokenFloat(s);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)', [0]));
+          end else if cm = 'g' then begin
+            x1 := TokenFloat(s);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_color(%d)', [0]));
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)', [Ord(bsSolid)]));
+          ////////////////////////////////
           end else if cm = 'n' then begin
-          end else if (cm = 's') or (cm = 'f') then begin
+            // End the path object without filling or stroking it.
+            params.Clear;
+          end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
+           (cm = 'f*') or (cm = 'b*') then begin
+
+            if (cm = 's') then begin
+              params[params.Count-1] :=  params[params.Count-1] +
+               Format(',%d,%d',
+               [Trunc(sx*Rate), Trunc(sy*Rate)]);
+              params.Objects[params.Count-1] :=
+               TObject(Integer(params.Objects[params.Count-1]) + 1);
+            end;
+
             for j := 0 to params.Count-1 do begin
               case Integer(params.Objects[j]) of
                 0:;
@@ -115,8 +135,11 @@ var
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [params[j]]));
                 end;
                 else begin
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)', [Ord(bsClear)]));
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.drawpoly(%s)', [params[j]]));
+                  if (cm = 's') or (cm = 'S') then begin
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)', [params[j]]));
+                  end else begin
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)', [params[j]]));
+                  end;
                 end;
               end;
             end;
