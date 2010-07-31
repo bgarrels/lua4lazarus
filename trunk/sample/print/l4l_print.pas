@@ -23,11 +23,13 @@ type
 
   TLuaPrint = class(TObject)
   private
-    FInitCanvas: TCanvas;
+    FCanvasStack: TObjectList;
     function GetPageCount: integer;
     function GetPageSize: TSize;
     function GetPaperSize: TSize;
     procedure CopyCanvas(src, dst: TCanvas);
+    procedure PushCanvas;
+    procedure PopCanvas;
   protected
     LS: Plua_State;
     FPageList: TObjectList;
@@ -212,8 +214,8 @@ type
     function l4l_pen_width: integer;
     function l4l_brush_color: integer;
     function l4l_brush_style: integer;
-    function l4l_SaveHandleState: integer;
-    function l4l_RestoreHandleState: integer;
+    function l4l_PushCanvas: integer;
+    function l4l_PopCanvas: integer;
     function l4l_SetClipRect: integer;
   end;
 
@@ -248,6 +250,24 @@ begin
   dst.Brush.Assign(src.Brush);
 end;
 
+procedure TLuaPrint.PushCanvas;
+var
+  c: TCanvas;
+begin
+  c := TCanvas.Create;
+  CopyCanvas(FCanvas, c);
+  FCanvasStack.Add(c);
+end;
+
+procedure TLuaPrint.PopCanvas;
+var
+  c: TCanvas;
+begin
+  c := TCanvas(FCanvasStack[FCanvasStack.Count-1]);
+  CopyCanvas(c, FCanvas);
+  FCanvasStack.Delete(FCanvasStack.Count-1);
+end;
+
 function TLuaPrint.LP2DP(lp: integer): integer;
 begin
   Result:= Trunc(lp * FDPI / MM_P_INCH + 0.5);
@@ -269,7 +289,7 @@ begin
   FPageList:= TObjectList.Create(True);
   FBmpList:= TObjectList.Create(True);
   FResList:= TObjectList.Create(True);
-  FInitCanvas := TCanvas.Create;
+  FCanvasStack := TObjectList.Create(True);
 end;
 
 destructor TLuaPrint.Destroy;
@@ -277,7 +297,7 @@ begin
   FPageList.Free;
   FBmpList.Free;
   FResList.Free;
-  FInitCanvas.Free;
+  FCanvasStack.Free;
   inherited Destroy;
 end;
 
@@ -312,13 +332,13 @@ begin
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= FDPI;
   FCanvas.Font.Size:= 10;
-  CopyCanvas(FCanvas, FInitCanvas);
+  PushCanvas;
   FResList.Clear;
 end;
 
 procedure TLuaPrint.EndDoc;
 begin
-  CopyCanvas(FInitCanvas, FCanvas);
+  PopCanvas;
   if FPageList.Count > 0 then begin
     if TStringList(FPageList[FPageList.Count-1]).Count = 0 then begin
       FPageList.Delete(FPageList.Count-1);
@@ -336,11 +356,11 @@ begin
   bmp := TBitmap.Create;
   FBmpList.Add(bmp);
   CopyCanvas(FCanvas, bmp.Canvas);
-  CopyCanvas(FInitCanvas, FCanvas);
+  PopCanvas;
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= Printer.YDPI;
   FCanvas.Font.Size:= FCanvas.Font.Size;
-  CopyCanvas(FCanvas, FInitCanvas);
+  PushCanvas;
 end;
 
 procedure TLuaPrint.Run(const SourceCode: string);
@@ -606,17 +626,22 @@ begin
   fn := lua_tostring(LS, -1);
   ms := TMemoryStream.Create;
   ms.LoadFromFile(fn);
-  LuaPrint.FCanvas.SaveHandleState;
-  LuaPrint.AddOrder(PRUN_NAME + '.SaveHandleState()');
+  LuaPrint.PushCanvas;
+  LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
   case lua_gettop(LS) of
     5: begin
-      DrawPDF(ms, Self,
+      DrawPDF(ms, Self, 1,
+       LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+       LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
+    end;
+    6: begin
+      DrawPDF(ms, Self, lua_tointeger(LS, 5),
        LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
        LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
     end;
   end;
-  LuaPrint.AddOrder(PRUN_NAME + '.RestoreHandleState()');
-  LuaPrint.FCanvas.RestoreHandleState;
+  LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+  LuaPrint.PopCanvas;
   Result := 0;
 end;
 
@@ -1058,14 +1083,14 @@ begin
   Result := 0;
 end;
 
-function TLuaPrintRunObject.l4l_SaveHandleState: integer;
+function TLuaPrintRunObject.l4l_PushCanvas: integer;
 begin
-  LuaPrint.FCanvas.SaveHandleState;
+  LuaPrint.PushCanvas;
 end;
 
-function TLuaPrintRunObject.l4l_RestoreHandleState: integer;
+function TLuaPrintRunObject.l4l_PopCanvas: integer;
 begin
-  LuaPrint.FCanvas.RestoreHandleState;
+  LuaPrint.PopCanvas;
 end;
 
 function TLuaPrintRunObject.l4l_SetClipRect: integer;

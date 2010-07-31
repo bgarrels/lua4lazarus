@@ -16,7 +16,8 @@ interface
 uses
   Classes, SysUtils, l4l_print;
 
-procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; x1, y1, x2, y2: integer);
+procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
+ x1, y1, x2, y2: integer);
 
 implementation
 uses
@@ -25,26 +26,12 @@ uses
 const
   PRUN_NAME = 'P_';
 
-procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; x1, y1, x2, y2: integer);
+procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
+ x1, y1, x2, y2: integer);
 var
   PageW, PageH, RateW, RateH, Rate: double;
 
-  function TokenFloat(var s: string): double;
-  var
-    i: integer;
-  begin
-    i := 1;
-    while (i <= Length(s)) and (s[i] in ['0'..'9','.','-']) do Inc(i);
-    if i > 1 then begin
-      Result := StrToFloat(Trim(Copy(s, 1, i-1)));
-      Delete(s, 1, i);
-    end else begin
-      Result := 0;
-      Delete(s, 1, 1);
-    end;
-  end;
-
-  function TokenFloat2(var p: PChar): double;
+  function TokenFloat(var p: PChar): double;
   var
     i, l: integer;
   begin
@@ -60,127 +47,137 @@ var
     end;
   end;
 
+  function TokenLine(var p: PChar): string;
+  var
+    pp: PChar;
+  begin
+    pp := p;
+    while (p^ <> #0) and not(p^ in [#$0a, #$0d]) do Inc(p);
+    if p <> pp then begin
+      Result := Trim(Copy(pp, 1, p-pp));
+    end else begin
+      Result := '';
+    end;
+    while (p^ <> #0) and (p^ in [#$0a, #$0d]) do Inc(p);
+  end;
+
   procedure DrawPage(cmd: string);
   var
-    sl, params: TStringList;
-    i, j: integer;
+    params: TStringList;
+    i: integer;
     s, cm: string;
     sx, sy, x1, y1, x2, y2: double;
+    sp, sp1: PChar;
   begin
-    sl := TStringList.Create;
+    params := TStringList.Create;
     try
-      sl.Text := cmd;
-      params := TStringList.Create;
-      try
-        for i := 0 to sl.Count-1 do begin
-          s := sl[i];
-          j := Length(s);
-          while j >= 1 do begin
-            if not (s[j] in ['0'..'9', 'a'..'z', 'A'..'Z']) then break;
-            Dec(j);
-          end;
-          if j > 0 then begin
-            cm := Copy(s, j+1, Length(s));
-            Delete(s, j+1, Length(s));
-          end else begin
-            cm := s;
-            s := '';
-          end;
+      sp := PChar(cmd);
+      while sp^ <> #0 do begin
+        s := TokenLine(sp);
+        if s = '' then continue;
+        i := Length(s);
+        while i >= 1 do begin
+          if not (s[i] in ['0'..'9', 'a'..'z', 'A'..'Z']) then break;
+          Dec(i);
+        end;
+        if i > 0 then begin
+          cm := Copy(s, i+1, Length(s));
+          Delete(s, i+1, Length(s));
+        end else begin
+          cm := s;
+          s := '';
+        end;
 
-          if cm = 'm' then begin
-            sx:= TokenFloat(s); sy := TokenFloat(s);
-            params.AddObject(Format('%d,%d',
-             [Trunc(sx*Rate), Trunc(sy*Rate)]),
-             TObject(0)
-            );
-          end else if cm = 'l' then begin
-            params[params.Count-1] :=  params[params.Count-1] +
-             Format(',%d,%d',
-             [Trunc(TokenFloat(s)*Rate), Trunc(TokenFloat(s)*Rate)]);
-            params.Objects[params.Count-1] :=
-             TObject(Integer(params.Objects[params.Count-1]) + 1);
-          end else if cm = 'h' then begin
+        sp1 := PChar(s);
+        if cm = 'm' then begin
+          sx:= TokenFloat(sp1); sy := TokenFloat(sp1);
+          params.AddObject(Format('%d,%d',
+           [Trunc(sx*Rate), Trunc(sy*Rate)]),
+           TObject(0)
+          );
+        end else if cm = 'l' then begin
+          params[params.Count-1] :=  params[params.Count-1] +
+           Format(',%d,%d',
+           [Trunc(TokenFloat(sp1)*Rate), Trunc(TokenFloat(sp1)*Rate)]);
+          params.Objects[params.Count-1] :=
+           TObject(Integer(params.Objects[params.Count-1]) + 1);
+        end else if cm = 'h' then begin
+          params[params.Count-1] :=  params[params.Count-1] +
+           Format(',%d,%d',
+           [Trunc(sx*Rate), Trunc(sy*Rate)]);
+          params.Objects[params.Count-1] :=
+           TObject(Integer(params.Objects[params.Count-1]) + 1);
+        end else if cm = 're' then begin
+          x1 := TokenFloat(sp1);
+          y1 := TokenFloat(sp1);
+          x2 := TokenFloat(sp1);
+          y2 := TokenFloat(sp1);
+          params.Add(
+           Format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d',
+           [Trunc(x1*Rate), Trunc(y1*Rate),
+            Trunc((x1+x2)*Rate), Trunc(y1*Rate),
+            Trunc((x1+x2)*Rate), Trunc((y1+y2)*Rate),
+            Trunc(x1*Rate), Trunc((y1+y2)*Rate),
+            Trunc(x1*Rate), Trunc(y1*Rate)]));
+          params.Objects[params.Count-1] := TObject(4);
+        ////////////////////////////////
+        end else if cm = 'G' then begin
+          x1 := TokenFloat(sp1);
+          i := RGBToColor(Trunc(255*x1), Trunc(255*x1), Trunc(255*x1));
+          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)', [i]));
+          LPO.LuaPrint.Canvas.Pen.Color:= i;
+        end else if cm = 'g' then begin
+          x1 := TokenFloat(sp1);
+          i := RGBToColor(Trunc(255*x1), Trunc(255*x1), Trunc(255*x1));
+          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_color(%d)', [i]));
+          LPO.LuaPrint.Canvas.Brush.Color:= i;
+        ////////////////////////////////
+        end else if cm = 'n' then begin
+          // End the path object without filling or stroking it.
+          params.Clear;
+        end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
+         (cm = 'f*') or (cm = 'b*') then begin
+
+          if (cm = 's') or (cm = 'b') then begin
             params[params.Count-1] :=  params[params.Count-1] +
              Format(',%d,%d',
              [Trunc(sx*Rate), Trunc(sy*Rate)]);
             params.Objects[params.Count-1] :=
              TObject(Integer(params.Objects[params.Count-1]) + 1);
-          end else if cm = 're' then begin
-            x1 := TokenFloat(s);
-            y1 := TokenFloat(s);
-            x2 := TokenFloat(s);
-            y2 := TokenFloat(s);
-            params.Add(
-             Format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d',
-             //[LPO.LP2DP(Trunc(x1)), LPO.LP2DP(Trunc(y1)),
-             // LPO.LP2DP(Trunc(x1+TokenFloat(s))),
-             // LPO.LP2DP(Trunc(y1+TokenFloat(s)))]));
-             [Trunc(x1*Rate), Trunc(y1*Rate),
-              Trunc((x1+x2)*Rate), Trunc(y1*Rate),
-              Trunc((x1+x2)*Rate), Trunc((y1+y2)*Rate),
-              Trunc(x1*Rate), Trunc((y1+y2)*Rate),
-              Trunc(x1*Rate), Trunc(y1*Rate)]));
-            params.Objects[params.Count-1] := TObject(4);
-          ////////////////////////////////
-          end else if cm = 'G' then begin
-            x1 := TokenFloat(s);
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)', [0]));
-            LPO.LuaPrint.Canvas.Pen.Color:= 0;
-          end else if cm = 'g' then begin
-            x1 := TokenFloat(s);
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_color(%d)', [0]));
-            //LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)', [Ord(bsSolid)]));
-            LPO.LuaPrint.Canvas.Brush.Color:= 0;
-          ////////////////////////////////
-          end else if cm = 'n' then begin
-            // End the path object without filling or stroking it.
-            params.Clear;
-          end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
-           (cm = 'f*') or (cm = 'b*') then begin
+          end;
 
-            if (cm = 's') or (cm = 'b') then begin
-              params[params.Count-1] :=  params[params.Count-1] +
-               Format(',%d,%d',
-               [Trunc(sx*Rate), Trunc(sy*Rate)]);
-              params.Objects[params.Count-1] :=
-               TObject(Integer(params.Objects[params.Count-1]) + 1);
-            end;
-
-            for j := 0 to params.Count-1 do begin
-              case Integer(params.Objects[j]) of
-                0:;
-                1: begin
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [params[j]]));
-                end;
-                else begin
-                  if (cm = 's') or (cm = 'S') then begin
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
-                     [params[j]]));
-                  end else if (cm = 'b') or (cm = 'b*')
-                   or (cm = 'B') or (cm = 'B*') then begin
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
-                     [params[j], Integer((cm = 'b') or (cm = 'B'))]));
-                  end else begin
-                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.SaveHandleState()');
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                     [Integer(psSolid)]));
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                     [LPO.LuaPrint.Canvas.Brush.Color]));
-                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)',
-                     [params[j]]));
-                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.RestoreHandleState()');
-                  end;
+          for i := 0 to params.Count-1 do begin
+            case Integer(params.Objects[i]) of
+              0:;
+              1: begin
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [params[i]]));
+              end;
+              else begin
+                if (cm = 's') or (cm = 'S') then begin
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
+                   [params[i]]));
+                end else if (cm = 'b') or (cm = 'b*')
+                 or (cm = 'B') or (cm = 'B*') then begin
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
+                   [params[i], Integer((cm = 'b') or (cm = 'B'))]));
+                end else begin
+                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
+                   [Integer(psSolid)]));
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                   [LPO.LuaPrint.Canvas.Brush.Color]));
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)',
+                   [params[i]]));
+                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
                 end;
               end;
             end;
-            params.Clear;
           end;
+          params.Clear;
         end;
-      finally
-        params.Free;
       end;
     finally
-      sl.Free;
+      params.Free;
     end;
   end;
 
@@ -203,7 +200,7 @@ var
 const
   ZBUF_LEN = 10000;
 var
-  i, p1, p2, len, page: integer;
+  i, p1, p2, len, curpage: integer;
   src, s, s1, obj, cmd: string;
   sp, sp1, sp2: PChar;
   z: TZStream;
@@ -213,7 +210,7 @@ begin
   stream.Position:= 0;
   stream.ReadBuffer(src[1], stream.Size);
   sp := PChar(src);
-  page := 1;
+  curpage := 1;
   while True do begin
     sp1 := mempos(sp, 'obj', Length(src)-Integer(sp-PChar(src)));
     if sp1 <> nil then begin
@@ -241,16 +238,16 @@ begin
             Break;
           Inc(i);
         end;
-        if Page = 1 then begin
+        if curpage = page then begin
           PageW := 0;
           PageH := 0;
           sp1 := strpos(PChar(s), '/CropBox[');
           if sp1 <> nil then begin
             Inc(sp1, 9);
-            TokenFloat2(sp1);
-            TokenFloat2(sp1);
-            PageW := TokenFloat2(sp1);
-            PageH := TokenFloat2(sp1);
+            TokenFloat(sp1);
+            TokenFloat(sp1);
+            PageW := TokenFloat(sp1);
+            PageH := TokenFloat(sp1);
 
             if PageW <> 0 then begin
               RateW := (x2 - x1) / PageW;
@@ -267,7 +264,7 @@ begin
           end;
           break;
         end;
-        Inc(page);
+        Inc(curpage);
       end;
     end;
   end; // while
@@ -291,7 +288,7 @@ begin
       sp1:= strpos(sp, '/Length');
       if sp1 <> nil then begin
         Inc(sp1, 8);
-        len:= Trunc(TokenFloat2(sp1));
+        len:= Trunc(TokenFloat(sp1));
       end;
       if len > 0 then begin
         sp := strpos(sp, 'stream');
