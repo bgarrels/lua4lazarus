@@ -21,10 +21,16 @@ procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
 
 implementation
 uses
-  graphics, paszlib;
+  graphics, contnrs, paszlib;
 
 const
   PRUN_NAME = 'P_';
+
+type
+  TDblXY = class
+  public
+    x, y: double;
+  end;
 
 procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
  x1, y1, x2, y2: integer);
@@ -63,13 +69,14 @@ var
 
   procedure DrawPage(cmd: string);
   var
-    params: TStringList;
+    params: TObjectList;
     i: integer;
-    s, cm: string;
+    s, s1, cm: string;
     sx, sy, x1, y1, x2, y2: double;
     sp, sp1: PChar;
+    xy: TDblXY;
   begin
-    params := TStringList.Create;
+    params := TObjectList.Create(True);
     try
       sp := PChar(cmd);
       while sp^ <> #0 do begin
@@ -90,36 +97,40 @@ var
 
         sp1 := PChar(s);
         if cm = 'm' then begin
-          sx:= TokenFloat(sp1); sy := TokenFloat(sp1);
-          params.AddObject(Format('%d,%d',
-           [Trunc(sx*Rate), Trunc(sy*Rate)]),
-           TObject(0)
-          );
+          xy := TDblXY.Create;
+          xy.x:= TokenFloat(sp1); xy.y := TokenFloat(sp1);
+          params.Add(xy);
         end else if cm = 'l' then begin
-          params[params.Count-1] :=  params[params.Count-1] +
-           Format(',%d,%d',
-           [Trunc(TokenFloat(sp1)*Rate), Trunc(TokenFloat(sp1)*Rate)]);
-          params.Objects[params.Count-1] :=
-           TObject(Integer(params.Objects[params.Count-1]) + 1);
+          xy := TDblXY.Create;
+          xy.x:= TokenFloat(sp1); xy.y := TokenFloat(sp1);
+          params.Add(xy);
         end else if cm = 'h' then begin
-          params[params.Count-1] :=  params[params.Count-1] +
-           Format(',%d,%d',
-           [Trunc(sx*Rate), Trunc(sy*Rate)]);
-          params.Objects[params.Count-1] :=
-           TObject(Integer(params.Objects[params.Count-1]) + 1);
+          if params.Count > 0 then begin
+            xy := TDblXY.Create;
+            xy.x:= TDblXY(params[0]).x;
+            xy.y := TDblXY(params[0]).y;
+            params.Add(xy);
+          end;
         end else if cm = 're' then begin
           x1 := TokenFloat(sp1);
           y1 := TokenFloat(sp1);
           x2 := TokenFloat(sp1);
           y2 := TokenFloat(sp1);
-          params.Add(
-           Format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d',
-           [Trunc(x1*Rate), Trunc(y1*Rate),
-            Trunc((x1+x2)*Rate), Trunc(y1*Rate),
-            Trunc((x1+x2)*Rate), Trunc((y1+y2)*Rate),
-            Trunc(x1*Rate), Trunc((y1+y2)*Rate),
-            Trunc(x1*Rate), Trunc(y1*Rate)]));
-          params.Objects[params.Count-1] := TObject(4);
+          xy := TDblXY.Create;
+          xy.x:= x1; xy.y := y1;
+          params.Add(xy);
+          xy := TDblXY.Create;
+          xy.x:= x1+x2; xy.y := y1;
+          params.Add(xy);
+          xy := TDblXY.Create;
+          xy.x:= x1+x2; xy.y := y1+y2;
+          params.Add(xy);
+          xy := TDblXY.Create;
+          xy.x:= x1; xy.y := y1+y2;
+          params.Add(xy);
+          xy := TDblXY.Create;
+          xy.x:= x1; xy.y := y1;
+          params.Add(xy);
         ////////////////////////////////
         end else if cm = 'G' then begin
           x1 := TokenFloat(sp1);
@@ -137,43 +148,50 @@ var
           params.Clear;
         end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
          (cm = 'f*') or (cm = 'b*') then begin
+          if params.Count > 0 then begin
+            if (cm = 's') or (cm = 'b') then begin
+              xy := TDblXY.Create;
+              xy.x:= TDblXY(params[0]).x;
+              xy.y := TDblXY(params[0]).y;
+              params.Add(xy);
+            end;
 
-          if (cm = 's') or (cm = 'b') then begin
-            params[params.Count-1] :=  params[params.Count-1] +
-             Format(',%d,%d',
-             [Trunc(sx*Rate), Trunc(sy*Rate)]);
-            params.Objects[params.Count-1] :=
-             TObject(Integer(params.Objects[params.Count-1]) + 1);
-          end;
+            s1 := '';
+            for i := 0 to params.Count-1 do begin
+              s1 := s1 + Format('%d,%d,',
+               [Trunc(TDblXY(params[i]).x*Rate), Trunc(TDblXY(params[i]).y*Rate)]);
+            end;
+            Delete(s1, Length(s1), 1);
 
-          for i := 0 to params.Count-1 do begin
-            case Integer(params.Objects[i]) of
-              0:;
-              1: begin
-                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [params[i]]));
+            case params.Count of
+              1: ;
+              2: begin
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [s1]));
               end;
               else begin
-                if (cm = 's') or (cm = 'S') then begin
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
-                   [params[i]]));
-                end else if (cm = 'b') or (cm = 'b*')
-                 or (cm = 'B') or (cm = 'B*') then begin
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
-                   [params[i], Integer((cm = 'b') or (cm = 'B'))]));
-                end else begin
-                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                   [Integer(psSolid)]));
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                   [LPO.LuaPrint.Canvas.Brush.Color]));
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)',
-                   [params[i]]));
-                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+                for i := 0 to params.Count-1 do begin
+                  if (cm = 's') or (cm = 'S') then begin
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
+                     [s1]));
+                  end else if (cm = 'b') or (cm = 'b*')
+                   or (cm = 'B') or (cm = 'B*') then begin
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
+                     [s1, Integer((cm = 'b') or (cm = 'B'))]));
+                  end else begin
+                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
+                     [Integer(psSolid)]));
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                     [LPO.LuaPrint.Canvas.Brush.Color]));
+                    LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)',
+                     [s1]));
+                    LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+                  end;
                 end;
               end;
             end;
+            params.Clear;
           end;
-          params.Clear;
         end;
       end;
     finally
