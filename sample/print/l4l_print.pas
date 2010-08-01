@@ -199,6 +199,7 @@ type
   published
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
+    function l4l_fillrect: integer;
     function l4l_Line: integer;
     function l4l_Polygon: integer;
     function l4l_Polyline: integer;
@@ -929,8 +930,28 @@ begin
 end;
 
 function TLuaPrintRunObject.l4l_Rectangle: integer;
+var
+  x1, y1, x2, y2: integer;
 begin
-  LuaPrint.FCanvas.Rectangle(
+  x1:= zx(lua_tointeger(LS, 1));
+  y1:= zy(lua_tointeger(LS, 2));
+  x2:= zx(lua_tointeger(LS, 3));
+  y2:= zy(lua_tointeger(LS, 4));
+  if (x2-x1) = 0 then begin
+    LuaPrint.FCanvas.Line(x1, y1, x1, y2);
+  end else if (y2-y1) = 0 then begin
+    LuaPrint.FCanvas.Line(x1, y1, x2, y1);
+  end else begin
+    LuaPrint.FCanvas.Rectangle(
+     zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
+     zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
+  end;
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_fillrect: integer;
+begin
+  LuaPrint.FCanvas.FillRect(
    zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
    zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
   Result := 0;
