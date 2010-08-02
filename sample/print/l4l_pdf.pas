@@ -87,7 +87,8 @@ var
     params: TObjectList;
     i: integer;
     s, s1, s2, cm: string;
-    sx, sy, x1, y1, x2, y2: double;
+    ws: WideString;
+    sx, sy, x1, y1, x2, y2, mmx: double;
     sp, sp1: PChar;
     xy: TDblXY;
     bt: boolean;
@@ -96,17 +97,19 @@ var
     try
       sp := PChar(cmd);
       bt := False;
+      mmx:=0;
       while sp^ <> #0 do begin
         s := TokenLine(sp);
         if s = '' then continue;
         i := Length(s);
         while i >= 1 do begin
-          if not (s[i] in ['0'..'9', 'a'..'z', 'A'..'Z']) then break;
+          if not(s[i] in ['0'..'9', 'a'..'z', 'A'..'Z']) then break;
           Dec(i);
         end;
         if i > 0 then begin
           cm := Copy(s, i+1, Length(s));
           Delete(s, i+1, Length(s));
+          s := Trim(s);
         end else begin
           cm := s;
           s := '';
@@ -115,6 +118,7 @@ var
         sp1 := PChar(s);
         if cm = 'BT' then begin
           bt := True;
+          sx:= 0;  sy := 0;
         end else if cm = 'ET' then begin
           bt := False;
         end else if cm = 'm' then begin
@@ -223,14 +227,23 @@ var
             params.Clear;
           end;
         end else if cm = 'Tj' then begin
-          TokenStr(sp, '<');
-          s1 := TokenStr(sp, '>');
-          SetLength(s2, Length(s1) div 2);
-          for i := 1 to Length(s1) div 2 do begin
-            s2[i] := Char(StrToInt('$' + s1[(i-1)*2+1] + s1[i*2]));
+          if sp1^ = '(' then
+            s1 := TokenStr(sp1, ')')
+          else
+            s1 := TokenStr(sp1, '>');
+          Delete(s1, 1, 1);
+          SetLength(ws, {Length(s1) div 4}1);
+          for i := 1 to {Length(s1) div 4}1 do begin
+            ws[i] := WideChar(StrToInt(
+             //'$' + s1[i*4-3] + s1[i*4-2] + s1[i*4-1] + s1[i*4-0]));
+             '$' + s1[3] + s1[4] + s1[1] + s1[2]));
           end;
+          s1 := UTF8Encode(ws);
+          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+           [Integer(bsClear)]));
           LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-           [0, 0, '123']));
+           [Trunc(mmx*Rate), Trunc(sy*Rate), s1]));
+          mmx := mmx + LPO.LuaPrint.Canvas.TextWidth(s1);
         end;
       end;
     finally
