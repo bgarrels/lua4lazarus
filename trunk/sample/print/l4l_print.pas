@@ -937,9 +937,9 @@ begin
   y1:= zy(lua_tointeger(LS, 2));
   x2:= zx(lua_tointeger(LS, 3));
   y2:= zy(lua_tointeger(LS, 4));
-  if (x2-x1) = 0 then begin
+  if x1 = x2 then begin
     LuaPrint.FCanvas.Line(x1, y1, x1, y2);
-  end else if (y2-y1) = 0 then begin
+  end else if y1 = y2 then begin
     LuaPrint.FCanvas.Line(x1, y1, x2, y1);
   end else begin
     LuaPrint.FCanvas.Rectangle(
