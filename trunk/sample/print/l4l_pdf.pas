@@ -68,18 +68,34 @@ var
     while (p^ <> #0) and (p^ in [#$0a, #$0d]) do Inc(p);
   end;
 
+  function TokenStr(var p: PChar; c: char): string;
+  var
+    pp: PChar;
+  begin
+    pp := p;
+    while (p^ <> #0) and (p^ <> c) do Inc(p);
+    if p <> pp then begin
+      Result := Trim(Copy(pp, 1, p-pp));
+    end else begin
+      Result := '';
+    end;
+    if p^ = c then Inc(p);
+  end;
+
   procedure DrawPage(cmd: string);
   var
     params: TObjectList;
     i: integer;
-    s, s1, cm: string;
+    s, s1, s2, cm: string;
     sx, sy, x1, y1, x2, y2: double;
     sp, sp1: PChar;
     xy: TDblXY;
+    bt: boolean;
   begin
     params := TObjectList.Create(True);
     try
       sp := PChar(cmd);
+      bt := False;
       while sp^ <> #0 do begin
         s := TokenLine(sp);
         if s = '' then continue;
@@ -97,7 +113,11 @@ var
         end;
 
         sp1 := PChar(s);
-        if cm = 'm' then begin
+        if cm = 'BT' then begin
+          bt := True;
+        end else if cm = 'ET' then begin
+          bt := False;
+        end else if cm = 'm' then begin
           xy := TDblXY.Create;
           xy.re:= False;
           xy.x:= TokenFloat(sp1); xy.y := TokenFloat(sp1);
@@ -202,6 +222,15 @@ var
             end;
             params.Clear;
           end;
+        end else if cm = 'Tj' then begin
+          TokenStr(sp, '<');
+          s1 := TokenStr(sp, '>');
+          SetLength(s2, Length(s1) div 2);
+          for i := 1 to Length(s1) div 2 do begin
+            s2[i] := Char(StrToInt('$' + s1[(i-1)*2+1] + s1[i*2]));
+          end;
+          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+           [0, 0, '123']));
         end;
       end;
     finally
