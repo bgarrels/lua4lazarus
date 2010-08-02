@@ -161,18 +161,18 @@ var
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
                 LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                  [Integer(bsClear)]));
-                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [s1]));
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
               end else if (cm = 'b') or (cm = 'b*')
                or (cm = 'B') or (cm = 'B*') then begin
-                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [s1]));
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
               end else begin
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
                 LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
                  [Integer(psSolid)]));
                 LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
                  [LPO.LuaPrint.Canvas.Brush.Color]));
-                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.line(%s)', [s1]));
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
               end;
             end else begin
@@ -185,8 +185,7 @@ var
               Delete(s1, Length(s1), 1);
 
               if (cm = 's') or (cm = 'S') then begin
-                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)',
-                 [s1]));
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)', [s1]));
               end else if (cm = 'b') or (cm = 'b*')
                or (cm = 'B') or (cm = 'B*') then begin
                 LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
