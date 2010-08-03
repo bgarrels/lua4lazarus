@@ -103,7 +103,8 @@ var
         if s = '' then continue;
         i := Length(s);
         while i >= 1 do begin
-          if not(s[i] in ['0'..'9', 'a'..'z', 'A'..'Z']) then break;
+          if (s[i] in [{#0,} #$09, {#$0a,} #$0c, {#$0d,}
+           ' ', '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']) then break;
           Dec(i);
         end;
         if i > 0 then begin
@@ -235,8 +236,7 @@ var
           SetLength(ws, {Length(s1) div 4}1);
           for i := 1 to {Length(s1) div 4}1 do begin
             ws[i] := WideChar(StrToInt(
-             //'$' + s1[i*4-3] + s1[i*4-2] + s1[i*4-1] + s1[i*4-0]));
-             '$' + s1[3] + s1[4] + s1[1] + s1[2]));
+             '$' + s1[i*4-3] + s1[i*4-2] + s1[i*4-1] + s1[i*4-0]));
           end;
           s1 := UTF8Encode(ws);
           LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
