@@ -54,7 +54,7 @@ begin
   end;
 
   for i := 0 to Printer.Printers.Count-1 do begin
-    ComboBox1.Items.Add(AnsiToUTF8(Printer.Printers[i]));  // Why needs AnsiToUTF8?
+    ComboBox1.Items.Add(Printer.Printers[i]);
   end;
   ComboBox1.ItemIndex:= Printer.PrinterIndex;
   ComboBox1Select(nil);
