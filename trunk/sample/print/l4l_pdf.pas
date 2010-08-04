@@ -237,11 +237,12 @@ var
           sy := PageH - TokenFloat(sp1) - y1; // f = y
         end else if cm = 'Td' then begin
           sx := sx + TokenFloat(sp1);
-          sy := sy  + TokenFloat(sp1);
+          sy := sy  - TokenFloat(sp1);
         end else if cm = 'TD' then begin
           sx := sx + TokenFloat(sp1);
-          sy := sy + TokenFloat(sp1);
-          tl := -sy;
+          y1 := TokenFloat(sp1);
+          sy := sy - y1;
+          tl := -y1;
         end else if cm = 'T*' then begin
           sy := sy  - tl;
         end else if cm = 'TL' then begin
@@ -264,13 +265,13 @@ var
           end else begin
             s1 := TokenStr(sp1, '>');
             Delete(s1, 1, 1);
-            s1 := StringOfChar('*', Length(s1) div 4);
+            s1 := Format('%.1f,%.1f %d', [sx, sy, Length(s1) div 4]);
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
              [Trunc(sx*Rate), Trunc(sy*Rate), s1]));
             sx := sx + LPO.LuaPrint.Canvas.TextWidth(s1) * Tfs + Tc + Tw;
-            //sy := sy + LPO.LuaPrint.Canvas.TextHeight(s1) * Tfs + Tc + Tw;
+            //sy := 0;
           end;
         end;
       end;
