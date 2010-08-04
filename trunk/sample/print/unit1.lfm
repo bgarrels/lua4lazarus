@@ -86,7 +86,7 @@ object Form1: TForm1
       ''
       'P.Pen.Color = "clRed"'
       'DrawFrame()'
-      'P.DrawPDF(0, 0, 10000, 10000, "01.pdf")'
+      'P.DrawPDF(0, 0, P.PageWidth, P.PageHeight, "01.pdf")'
       'P.Font.Style = "fsItalic, fsUnderline"'
       'P.Font.Size = 10'
       'P.TextOut(2000, 3000, "HIJKLMN")'

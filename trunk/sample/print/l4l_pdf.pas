@@ -87,8 +87,8 @@ var
     params: TObjectList;
     i: integer;
     s, s1, s2, cm: string;
-    ws: WideString;
-    sx, sy, x1, y1, x2, y2, mmx: double;
+    sx, sy, x1, y1, x2, y2: double;
+    Tl, Tc, Tw, Tfs: double;
     sp, sp1: PChar;
     xy: TDblXY;
     bt: boolean;
@@ -97,7 +97,7 @@ var
     try
       sp := PChar(cmd);
       bt := False;
-      mmx:=0;
+      Tl:=0; Tc := 0; Tw := 0;
       while sp^ <> #0 do begin
         s := TokenLine(sp);
         if s = '' then continue;
@@ -227,23 +227,51 @@ var
             end;
             params.Clear;
           end;
+        ////////////////////////////////////////////////////////////////////////
+        end else if cm = 'Tm' then begin
+          TokenFloat(sp1); // a
+          TokenFloat(sp1); // b
+          TokenFloat(sp1); // c
+          y1 := TokenFloat(sp1); // d
+          sx := TokenFloat(sp1); // e = x
+          sy := PageH - TokenFloat(sp1) - y1; // f = y
+        end else if cm = 'Td' then begin
+          sx := sx + TokenFloat(sp1);
+          sy := sy  + TokenFloat(sp1);
+        end else if cm = 'TD' then begin
+          sx := sx + TokenFloat(sp1);
+          sy := sy + TokenFloat(sp1);
+          tl := -sy;
+        end else if cm = 'T*' then begin
+          sy := sy  - tl;
+        end else if cm = 'TL' then begin
+          tl := TokenFloat(sp1);
+        end else if cm = 'Tc' then begin
+          tc := TokenFloat(sp1);
+        end else if cm = 'Tw' then begin
+          tw := TokenFloat(sp1);
+        end else if cm = 'Tf' then begin
+          TokenStr(sp1, ' ');
+          Tfs := TokenFloat(sp1);
         end else if cm = 'Tj' then begin
-          if sp1^ = '(' then
-            s1 := TokenStr(sp1, ')')
-          else
+          if sp1^ = '(' then begin
+            s1 := TokenStr(sp1, ')');
+            Delete(s1, 1, 1);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+             [Integer(bsClear)]));
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+             [Trunc(sx*Rate), Trunc(sy*Rate), s1]));
+          end else begin
             s1 := TokenStr(sp1, '>');
-          Delete(s1, 1, 1);
-          SetLength(ws, {Length(s1) div 4}1);
-          for i := 1 to {Length(s1) div 4}1 do begin
-            ws[i] := WideChar(StrToInt(
-             '$' + s1[i*4-3] + s1[i*4-2] + s1[i*4-1] + s1[i*4-0]));
+            Delete(s1, 1, 1);
+            s1 := StringOfChar('*', Length(s1) div 4);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+             [Integer(bsClear)]));
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+             [Trunc(sx*Rate), Trunc(sy*Rate), s1]));
+            sx := sx + LPO.LuaPrint.Canvas.TextWidth(s1) * Tfs + Tc + Tw;
+            //sy := sy + LPO.LuaPrint.Canvas.TextHeight(s1) * Tfs + Tc + Tw;
           end;
-          s1 := UTF8Encode(ws);
-          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-           [Integer(bsClear)]));
-          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-           [Trunc(mmx*Rate), Trunc(sy*Rate), s1]));
-          mmx := mmx + LPO.LuaPrint.Canvas.TextWidth(s1);
         end;
       end;
     finally
