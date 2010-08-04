@@ -33,6 +33,8 @@ type
     x, y: double;
   end;
 
+  TMatrix = array[1..3, 1..3] of double;
+
 procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
  x1, y1, x2, y2: integer);
 var
@@ -82,6 +84,33 @@ var
     if p^ = c then Inc(p);
   end;
 
+  function matrixmul(m1, m2: TMatrix): TMatrix;
+  const
+    N = 3;
+  var
+    i, j, k: integer;
+  begin
+//
+//          A[0]=[0.0,1.0,2.0];
+//          A[1]=[1.0,2.0,3.0];
+//          A[2]=[2.0,3.0,4.0];
+//          B[0]=[0.0,1.0,2.0];
+//          B[1]=[1.0,2.0,3.0];
+//          B[2]=[2.0,3.0,4.0];
+//          C[0]=[0.0,0.0,0.0];
+//          C[1]=[0.0,0.0,0.0];
+//          C[2]=[0.0,0.0,0.0];
+
+    for i:=1 to N do begin
+      for j:=1 to N do begin
+        Result[i][j]:= 0;
+        for k := 1 to N do begin
+          Result[i][j]:=Result[i][j]+m1[i][k]*m2[k][j];
+        end;
+      end;
+    end;
+  end;
+
   procedure DrawPage(cmd: string);
   var
     params: TObjectList;
@@ -92,6 +121,7 @@ var
     sp, sp1: PChar;
     xy: TDblXY;
     bt: boolean;
+    Tm, m1, m2: TMatrix;
   begin
     params := TObjectList.Create(True);
     try
@@ -179,8 +209,8 @@ var
               x2 := TDblXY(params[1]).x;
               y2 := TDblXY(params[1]).y;
               s1:= Format('%d,%d,%d,%d',
-               [Trunc(x1 * Rate), Trunc(y1 * Rate),
-                Trunc((x1+x2) * Rate), Trunc((y1+y2) * Rate)]);
+               [Trunc(x1 * Rate), Trunc((PageH-y1) * Rate),
+                Trunc((x1+x2) * Rate), Trunc((PageH-y1-y2) * Rate)]);
 
               if (cm = 's') or (cm = 'S') then begin
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
@@ -204,7 +234,7 @@ var
               s1 := '';
               for i := 0 to params.Count-1 do begin
                 sx := TDblXY(params[i]).x * Rate;
-                sy := TDblXY(params[i]).y * Rate;
+                sy := (PageH - TDblXY(params[i]).y) * Rate;
                 s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
               end;
               Delete(s1, Length(s1), 1);
@@ -229,22 +259,37 @@ var
           end;
         ////////////////////////////////////////////////////////////////////////
         end else if cm = 'Tm' then begin
-          TokenFloat(sp1); // a
-          TokenFloat(sp1); // b
-          TokenFloat(sp1); // c
-          y1 := TokenFloat(sp1); // d
-          sx := TokenFloat(sp1); // e = x
-          sy := PageH - TokenFloat(sp1) - y1; // f = y
+          Tm[1][1] := TokenFloat(sp1); // a
+          Tm[1][2] := TokenFloat(sp1); // b
+          Tm[1][3] := 0;
+          Tm[2][1] := TokenFloat(sp1); // c
+          Tm[2][2] := TokenFloat(sp1); // d
+          Tm[2][3] := 0;
+          Tm[3][1] := TokenFloat(sp1); // e = x
+          Tm[3][2] := TokenFloat(sp1); // f = y
+          Tm[3][3] := 1;
         end else if cm = 'Td' then begin
-          sx := sx + TokenFloat(sp1);
-          sy := sy  - TokenFloat(sp1);
+          m1[1][1] := 1; m1[1][2] := 0; m1[1][3] := 0;
+          m1[2][1] := 0; m1[2][2] := 1; m1[3][3] := 0;
+          m1[3][1] := TokenFloat(sp1);
+          m1[3][2] := TokenFloat(sp1);
+          m1[3][3] := 1;
+          Tm := matrixmul(m1, Tm);
         end else if cm = 'TD' then begin
-          sx := sx + TokenFloat(sp1);
-          y1 := TokenFloat(sp1);
-          sy := sy - y1;
-          tl := -y1;
+          m1[1][1] := 1; m1[1][2] := 0; m1[1][3] := 0;
+          m1[2][1] := 0; m1[2][2] := 1; m1[3][3] := 0;
+          m1[3][1] := TokenFloat(sp1);
+          m1[3][2] := TokenFloat(sp1);
+          m1[3][3] := 1;
+          Tm := matrixmul(m1, Tm);
+          Tl := m1[3][2];
         end else if cm = 'T*' then begin
-          sy := sy  - tl;
+          m1[1][1] := 1; m1[1][2] := 0; m1[1][3] := 0;
+          m1[2][1] := 0; m1[2][2] := 1; m1[3][3] := 0;
+          m1[3][1] := 0;
+          m1[3][2] := Tl;
+          m1[3][3] := 1;
+          Tm := matrixmul(m1, Tm);
         end else if cm = 'TL' then begin
           tl := TokenFloat(sp1);
         end else if cm = 'Tc' then begin
@@ -262,16 +307,32 @@ var
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
              [Trunc(sx*Rate), Trunc(sy*Rate), s1]));
-          end else begin
+          end else if sp1^ = '<' then begin
             s1 := TokenStr(sp1, '>');
             Delete(s1, 1, 1);
-            s1 := Format('%.1f,%.1f %d', [sx, sy, Length(s1) div 4]);
+            s1 := StringOfChar('*', Length(s1) div 4) + Format('%d', [Length(s1) div 4]);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+             [Integer(bsClear)]));
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+             [Trunc(Tm[3][1]*Rate), Trunc((PageH-Tm[3][2]-Tm[2][2])*Rate), s1]));
+          end;
+        end else if cm = 'TJ' then begin // ToDo
+          Inc(sp1);
+          if sp1^ = '(' then begin
+            s1 := TokenStr(sp1, ')');
+            Delete(s1, 1, 1);
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
              [Trunc(sx*Rate), Trunc(sy*Rate), s1]));
-            sx := sx + LPO.LuaPrint.Canvas.TextWidth(s1) * Tfs + Tc + Tw;
-            //sy := 0;
+          end else if sp1^ = '<' then begin
+            s1 := TokenStr(sp1, '>');
+            Delete(s1, 1, 1);
+            s1 := StringOfChar('*', Length(s1) div 4) + Format('%d', [Length(s1) div 4]);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+             [Integer(bsClear)]));
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+             [Trunc(Tm[3][1]*Rate), Trunc((PageH-Tm[3][2]-Tm[2][2])*Rate), s1]));
           end;
         end;
       end;
@@ -299,6 +360,7 @@ var
 const
   ZBUF_LEN = 10000;
 var
+  sl: TStringList; // for debug
   i, p1, p2, len, curpage: integer;
   src, s, s1, obj, cmd: string;
   sp, sp1, sp2: PChar;
@@ -419,6 +481,7 @@ begin
         end else begin
           cmd := Copy(sp, 1, len);
         end;
+        //sl:= TStringList.Create; sl.Text:=cmd; sl.SaveToFile('2.txt'); sl.Free;
         DrawPage(cmd);
       end;
     end;
