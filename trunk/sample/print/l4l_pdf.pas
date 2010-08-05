@@ -42,46 +42,18 @@ var
 
   function TokenFloat(var p: PChar): double;
   var
-    i, l: integer;
+    s: string;
   begin
-    i := 0;
-    l := strlen(p);
-    while (i < l) and ((p+i)^ in ['0'..'9','.','-']) do Inc(i);
-    if i > 0 then begin
-      Result := StrToFloat(Copy(p, 1, i));
-      while (i < l) and ((p+i)^ in [#1..' ']) do Inc(i);
-      Inc(p, i);
-    end else begin
-      Result := 0;
+    Result := 0;
+    while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
+    if p^ = #0 then Exit;
+    s:= '';
+    while (p^ <> #0) and (p^ in ['0'..'9','.','-']) do begin
+      s:= s + p^;
+      Inc(p);
     end;
-  end;
-
-  function TokenLine(var p: PChar): string;
-  var
-    pp: PChar;
-  begin
-    pp := p;
-    while (p^ <> #0) and not(p^ in [#$0a, #$0d]) do Inc(p);
-    if p <> pp then begin
-      Result := Trim(Copy(pp, 1, p-pp));
-    end else begin
-      Result := '';
-    end;
-    while (p^ <> #0) and (p^ in [#$0a, #$0d]) do Inc(p);
-  end;
-
-  function TokenStr(var p: PChar; c: char): string;
-  var
-    pp: PChar;
-  begin
-    pp := p;
-    while (p^ <> #0) and (p^ <> c) do Inc(p);
-    if p <> pp then begin
-      Result := Trim(Copy(pp, 1, p-pp));
-    end else begin
-      Result := '';
-    end;
-    if p^ = c then Inc(p);
+    if s <> '' then Result := StrToFloat(s);
+    while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
   end;
 
   function matrixmul(m1, m2: TMatrix): TMatrix;
@@ -153,8 +125,8 @@ var
                 Inc(sp);
               end
             end;
-            while not (sp^ in [#0, #$09, #$0a, #$0c, #$0d,
-              ' ', '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']) do begin
+            while not (sp^ in [#0, #$09, #$0a, #$0c, #$0d, ' ',
+             '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']) do begin
               cm := cm + sp^;
               Inc(sp);
             end;
@@ -230,6 +202,10 @@ var
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_color(%d)', [i]));
             LPO.LuaPrint.Canvas.Brush.Color:= i;
             ss.Clear;
+          ////////////////////////////////
+          end else if cm = 'w' then begin
+            i := Trunc(StrToFloat(ss[ss.Count-1]) * Rate);
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_width(%d)', [i]));
           ////////////////////////////////
           end else if cm = 'n' then begin
             // End the path object without filling or stroking it.
