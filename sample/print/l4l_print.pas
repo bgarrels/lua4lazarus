@@ -203,6 +203,8 @@ type
     function l4l_Line: integer;
     function l4l_Polygon: integer;
     function l4l_Polyline: integer;
+    function l4l_PolyBezier: integer;
+    function l4l_PolyBezierLine: integer;
     function l4l_DrawImage: integer;
     function l4l_font_color: integer;
     function l4l_font_name: integer;
@@ -976,30 +978,60 @@ end;
 function TLuaPrintRunObject.l4l_Polygon: integer;
 var
   i, c: integer;
-  p: array [1..100] of TPoint;
+  p: array of TPoint;
   winding: boolean;
 begin
   c := lua_gettop(LS);
+  SetLength(p, c div 2);
   for i := 1 to c div 2 do begin
-    if i > 100 then break;
-    p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
   end;
   winding := False;
   if c mod 2 = 1 then winding := lua_toboolean(LS, c);
-  LuaPrint.FCanvas.Polygon(@p, c div 2, winding);
+  LuaPrint.FCanvas.Polygon(p, winding);
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
 var
   i, c: integer;
-  p: array [1..100] of TPoint;
+  p: array of TPoint;
 begin
   c := lua_gettop(LS);
+  SetLength(p, c div 2);
   for i := 1 to c div 2 do begin
-    if i > 100 then break;
-    p[i] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
   end;
-  LuaPrint.FCanvas.Polyline(@p, c div 2);
+  LuaPrint.FCanvas.Polyline(p);
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_PolyBezier: integer;
+var
+  i, c: integer;
+  p: array of TPoint;
+begin
+  c := lua_gettop(LS);
+  SetLength(p, c div 2);
+  for i := 1 to c div 2 do begin
+    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+  end;
+  LuaPrint.FCanvas.PolyBezier(p, True, True);
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_PolyBezierLine: integer;
+var
+  i, c: integer;
+  p: array of TPoint;
+begin
+  c := lua_gettop(LS);
+  SetLength(p, c div 2);
+  for i := 1 to c div 2 do begin
+    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+  end;
+  LuaPrint.FCanvas.PolyBezier(p, False, True);
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_DrawImage: integer;
@@ -1058,7 +1090,7 @@ end;
 
 function TLuaPrintRunObject.l4l_font_height: integer;
 begin
-  LuaPrint.FCanvas.Font.Height := lua_tointeger(LS, 1) * LuaPrint.FZoom div 100;
+  LuaPrint.FCanvas.Font.Height := w(lua_tointeger(LS, 1));
   Result := 0;
 end;
 
@@ -1107,11 +1139,13 @@ end;
 function TLuaPrintRunObject.l4l_PushCanvas: integer;
 begin
   LuaPrint.PushCanvas;
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_PopCanvas: integer;
 begin
   LuaPrint.PopCanvas;
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_SetClipRect: integer;
@@ -1119,6 +1153,7 @@ begin
   LuaPrint.FCanvas.Region.ClipRect :=
    Rect(lua_tointeger(LS, 1), lua_tointeger(LS, 2),
         lua_tointeger(LS, 3), lua_tointeger(LS, 4));
+  Result := 0;
 end;
 
 end.
