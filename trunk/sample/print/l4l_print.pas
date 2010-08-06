@@ -28,8 +28,6 @@ type
     function GetPageSize: TSize;
     function GetPaperSize: TSize;
     procedure CopyCanvas(src, dst: TCanvas);
-    procedure PushCanvas;
-    procedure PopCanvas;
   protected
     LS: Plua_State;
     FPageList: TObjectList;
@@ -63,6 +61,8 @@ type
     property DPI: integer read FDPI;
     procedure AddOrder(const s: string);
     property Canvas: TCanvas read FCanvas;
+    procedure PushCanvas;
+    procedure PopCanvas;
   end;
 
   { TLuaPrintObject }
@@ -213,6 +213,8 @@ type
     function l4l_font_style: integer;
     function l4l_pen_color: integer;
     function l4l_pen_style: integer;
+    function l4l_pen_joinstyle: integer;
+    function l4l_pen_endcap: integer;
     function l4l_pen_mode: integer;
     function l4l_pen_width: integer;
     function l4l_brush_color: integer;
@@ -335,6 +337,7 @@ begin
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= FDPI;
   FCanvas.Font.Size:= 10;
+  FCanvasStack.Clear;
   PushCanvas;
   FResList.Clear;
 end;
@@ -342,6 +345,7 @@ end;
 procedure TLuaPrint.EndDoc;
 begin
   PopCanvas;
+  FCanvasStack.Clear;
   if FPageList.Count > 0 then begin
     if TStringList(FPageList[FPageList.Count-1]).Count = 0 then begin
       FPageList.Delete(FPageList.Count-1);
@@ -1109,6 +1113,18 @@ end;
 function TLuaPrintRunObject.l4l_pen_style: integer;
 begin
   LuaPrint.FCanvas.Pen.Style := TPenStyle(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_pen_joinstyle: integer;
+begin
+  LuaPrint.FCanvas.Pen.JoinStyle := TPenJoinStyle(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_pen_endcap: integer;
+begin
+  LuaPrint.FCanvas.Pen.EndCap := TPenEndCap(lua_tointeger(LS, 1));
   Result := 0;
 end;
 
