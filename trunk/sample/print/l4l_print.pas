@@ -1042,8 +1042,9 @@ begin
   i := ALTERNATE;
   if lua_toboolean(LS, 1) then i := WINDING;
   SetPolyFillMode(LuaPrint.FCanvas.Handle, i);
-  PolyPolygon(LuaPrint.FCanvas.Handle, PPP, PPC, Length(PPC));
+  PolyPolygon(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
 {$ELSE}
+  // ToDo
   LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
 {$ENDIF}
   Result := 0;
@@ -1051,7 +1052,12 @@ end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
 begin
+{$IFDEF WINDOWS}
+  PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
+{$ELSE}
+  // ToDo
   LuaPrint.FCanvas.Polyline(PPP);
+{$ENDIF}
   Result := 0;
 end;
 

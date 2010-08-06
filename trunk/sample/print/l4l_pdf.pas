@@ -77,7 +77,7 @@ var
     ss: TStringList;
     params: TObjectList;
     i: integer;
-    s, s1, s2, cm: string;
+    s, s1, s2, cm, Tf: string;
     sx, sy, x1, y1, x2, y2: double;
     Tl, Tc, Tw, Tfs, Th, Trise: double;
     sp: PChar;
@@ -94,6 +94,7 @@ var
         sp := PChar(cmd);
         bt := False;
         Tl:=0; Tc := 0; Tw := 0; Trise:=0; Th:=1;
+        Tf := '';
         LPO.LuaPrint.Canvas.Pen.JoinStyle:= pjsMiter;
         LPO.LuaPrint.Canvas.Pen.EndCap:= pecFlat;
         while sp^ <> #0 do begin
@@ -372,9 +373,9 @@ var
                 end else begin
                   LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                   [Integer(psSolid)]));
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                   [LPO.LuaPrint.Canvas.Brush.Color]));
+                   [Integer(psClear)]));
+                  //LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                  // [LPO.LuaPrint.Canvas.Brush.Color]));
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                    [Integer(bsSolid)]));
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%d)',
@@ -439,7 +440,7 @@ var
             Trise := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
           end else if cm = 'Tf' then begin
-            //TokenStr(sp1, ' ');
+            Tf := ss[ss.Count-2];
             Tfs := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
           end else if cm = 'Tj' then begin
