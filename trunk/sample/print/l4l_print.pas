@@ -176,6 +176,9 @@ type
 
 implementation
 uses
+{$IFDEF WINDOWS}
+  windows,
+{$ENDIF}
   LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf, graphmath;
 
 const
@@ -188,6 +191,8 @@ type
 
   TLuaPrintRunObject  = class(TLuaObject)
   private
+    PPP: array of TPoint;
+    PPC: array of integer;
   protected
     LuaPrint: TLuaPrint;
     function w(i: integer): integer;
@@ -201,10 +206,10 @@ type
     function l4l_Rectangle: integer;
     function l4l_fillrect: integer;
     function l4l_Line: integer;
+    function l4l_AddPolyPoint: integer;
+    function l4l_AddBezierPoint: integer;
     function l4l_Polygon: integer;
     function l4l_Polyline: integer;
-    function l4l_PolyBezier: integer;
-    function l4l_PolyBezierLine: integer;
     function l4l_DrawImage: integer;
     function l4l_font_color: integer;
     function l4l_font_name: integer;
@@ -308,19 +313,19 @@ end;
 
 procedure TLuaPrint.BeginDoc;
 begin
-  BeginDoc(Rect(0,0,0,0));
+  BeginDoc(types.Rect(0,0,0,0));
 end;
 
 procedure TLuaPrint.BeginDoc(Margin: TRect);
 var
-  bmp: TBitmap;
+  bmp: graphics.TBitmap;
 begin
   FDPI := Printer.YDPI;
   FPageList.Clear;
   FPageList.Add(TStringList.Create);
   FPaperRect := Printer.PaperSize.PaperRect;
   FUserMargin :=
-   Rect(LP2DP(Margin.Left), LP2DP(Margin.Top),
+   types.Rect(LP2DP(Margin.Left), LP2DP(Margin.Top),
         LP2DP(Margin.Right), LP2DP(Margin.Bottom));
   FRealMargin := FUserMargin;
   if FPaperRect.WorkRect.Left > FRealMargin.Left then
@@ -332,7 +337,7 @@ begin
   if FPaperRect.PhysicalRect.Bottom-FPaperRect.WorkRect.Bottom > FRealMargin.Bottom then
     FRealMargin.Bottom := FPaperRect.PhysicalRect.Bottom-FPaperRect.WorkRect.Bottom;
   FBmpList.Clear;
-  bmp := TBitmap.Create;
+  bmp := graphics.TBitmap.Create;
   FBmpList.Add(bmp);
   FCanvas:= bmp.Canvas;
   FCanvas.Font.PixelsPerInch:= FDPI;
@@ -357,10 +362,10 @@ end;
 
 procedure TLuaPrint.NewPage;
 var
-  bmp: TBitmap;
+  bmp: graphics.TBitmap;
 begin
   FPageList.Add(TStringList.Create);
-  bmp := TBitmap.Create;
+  bmp := graphics.TBitmap.Create;
   FBmpList.Add(bmp);
   CopyCanvas(FCanvas, bmp.Canvas);
   PopCanvas;
@@ -381,7 +386,7 @@ end;
 procedure TLuaPrint.Play(pageNumber: integer; Canvas: TCanvas; dpi: integer;
   Zoom: integer);
 begin
-  Play(pageNumber, Canvas, Rect(0,0,0,0), dpi, Zoom);
+  Play(pageNumber, Canvas, types.Rect(0,0,0,0), dpi, Zoom);
 end;
 
 procedure TLuaPrint.Play(pageNumber: integer; Canvas: TCanvas; Margin: TRect;
@@ -391,7 +396,7 @@ var
   sl: TStringList;
   h: HRGN;
   x, y: integer;
-  bmp: TBitmap;
+  bmp: graphics.TBitmap;
 begin
   if (pageNumber > 0) and (pageNumber <= PageCount) then begin
     if dpi = 0 then dpi := Canvas.Font.PixelsPerInch;
@@ -407,7 +412,7 @@ begin
     Dec(y, Margin.Top);
 
     FCanvas := Canvas;
-    bmp := TBitmap(FBmpList[pageNumber-1]);
+    bmp := graphics.TBitmap(FBmpList[pageNumber-1]);
     CopyCanvas(bmp.Canvas, FCanvas);
     i := FCanvas.Font.Size;
     FCanvas.Font.PixelsPerInch:= FPlayDpi;
@@ -447,7 +452,7 @@ begin
   if endPage < beginPage then endPage := FPageList.Count;
   Printer.BeginDoc;
   try
-    m := Rect(
+    m := types.Rect(
      Printer.PaperSize.PaperRect.WorkRect.Left,
      Printer.PaperSize.PaperRect.WorkRect.Top,
      Printer.PaperSize.PaperRect.PhysicalRect.Right
@@ -979,81 +984,68 @@ begin
   Result := 0;
 end;
 
-function TLuaPrintRunObject.l4l_Polygon: integer;
+function TLuaPrintRunObject.l4l_AddPolyPoint: integer;
 var
-  i, c: integer;
-  p: array of TPoint;
-  winding: boolean;
+  i, c, l: integer;
 begin
   c := lua_gettop(LS);
-  SetLength(p, c div 2);
-  for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+  if c > 0 then begin
+    l := Length(PPP);
+    SetLength(PPP, l + c div 2);
+    for i := 1 to c div 2 do begin
+      PPP[l+i-1] := types.Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
+    end;
+    SetLength(PPC, Length(PPC)+1);
+    PPC[Length(PPC)-1] := c div 2;
+  end else begin
+    SetLength(PPP, 0);
+    SetLength(PPC, 0);
   end;
-  winding := False;
-  if c mod 2 = 1 then winding := lua_toboolean(LS, c);
-  LuaPrint.FCanvas.Polygon(p, winding);
+end;
+
+function TLuaPrintRunObject.l4l_AddBezierPoint: integer;
+var
+  i, c, l: integer;
+  p: array of TPoint;
+  pp: PPoint;
+begin
+  c := lua_gettop(LS);
+  if c > 0 then begin
+    SetLength(p, c div 2);
+    for i := 1 to c div 2 do begin
+      p[i-1] := types.Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
+    end;
+    pp:= AllocMem(0);
+    try
+      PolyBezier2Polyline(p, pp, c, True);
+    finally
+      FreeMem(pp);
+    end;
+    l := Length(PPP);
+    SetLength(PPP, l + c);
+    for i := 1 to c do PPP[l+i-1] := (pp+i-1)^;
+    SetLength(PPC, Length(PPC)+1);
+    PPC[Length(PPC)-1] := c;
+  end else begin
+    SetLength(PPP, 0);
+    SetLength(PPC, 0);
+  end;
+end;
+
+function TLuaPrintRunObject.l4l_Polygon: integer;
+begin
+{$IFDEF WINDOWS}
+  SetPolyFillMode(LuaPrint.FCanvas.Handle, lua_tointeger(LS, 1));
+  PolyPolygon(LuaPrint.FCanvas.Handle, PPP, PPC, Length(PPC));
+{$ELSE}
+  LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
+{$ENDIF}
   Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
-var
-  i, c: integer;
-  p: array of TPoint;
 begin
-  c := lua_gettop(LS);
-  SetLength(p, c div 2);
-  for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
-  end;
-  LuaPrint.FCanvas.Polyline(p);
-  Result := 0;
-end;
-
-function TLuaPrintRunObject.l4l_PolyBezier: integer;
-var
-  i, c: integer;
-  p: array of TPoint;
-  pp: PPoint;
-  winding: boolean;
-begin
-  c := lua_gettop(LS);
-  SetLength(p, c div 2);
-  for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
-  end;
-  winding := False;
-  if c mod 2 = 1 then winding := lua_toboolean(LS, c);
-  pp:= AllocMem(0);
-  try
-    PolyBezier2Polyline(p, pp, c, True);
-    LuaPrint.FCanvas.Polygon(pp, c, winding);
-    //LuaPrint.FCanvas.PolyBezier(p, True, True);
-  finally
-    FreeMem(pp);
-  end;
-  Result := 0;
-end;
-
-function TLuaPrintRunObject.l4l_PolyBezierLine: integer;
-var
-  i, c: integer;
-  p: array of TPoint;
-  pp: PPoint;
-begin
-  c := lua_gettop(LS);
-  SetLength(p, c div 2);
-  for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
-  end;
-  pp:= AllocMem(0);
-  try
-    PolyBezier2Polyline(p, pp, c, True);
-    LuaPrint.FCanvas.Polyline(pp, c);
-    //LuaPrint.FCanvas.PolyBezier(p, False, True);
-  finally
-    FreeMem(pp);
-  end;
+  LuaPrint.FCanvas.Polyline(PPP);
   Result := 0;
 end;
 
@@ -1084,7 +1076,7 @@ begin
       x2 := x1 + Trunc(g.Width  * n);
       y2 := y1 + Trunc(g.Height * n);
     end;
-    LuaPrint.FCanvas.StretchDraw(Rect(x1, y1, x2, y2), g.Graphic);
+    LuaPrint.FCanvas.StretchDraw(types.Rect(x1, y1, x2, y2), g.Graphic);
   finally
     g.Free;
   end;
@@ -1186,7 +1178,7 @@ end;
 function TLuaPrintRunObject.l4l_SetClipRect: integer;
 begin
   LuaPrint.FCanvas.Region.ClipRect :=
-   Rect(lua_tointeger(LS, 1), lua_tointeger(LS, 2),
+   types.Rect(lua_tointeger(LS, 1), lua_tointeger(LS, 2),
         lua_tointeger(LS, 3), lua_tointeger(LS, 4));
   Result := 0;
 end;
