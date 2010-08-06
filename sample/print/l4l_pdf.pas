@@ -358,7 +358,7 @@ var
                     Inc(i, 2);
                   end;
                 end;
-              end;
+              end; // while
 
               if poly then begin
                 if (cm = 's') or (cm = 'S') then begin
@@ -372,9 +372,9 @@ var
                 end else begin
                   LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                   [Integer(psClear)]));
-                  //LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                  // [LPO.LuaPrint.Canvas.Brush.Color]));
+                   [Integer(psSolid)]));
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                   [LPO.LuaPrint.Canvas.Brush.Color]));
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                    [Integer(bsSolid)]));
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%d)',
