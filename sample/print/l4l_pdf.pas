@@ -93,6 +93,8 @@ var
         sp := PChar(cmd);
         bt := False;
         Tl:=0; Tc := 0; Tw := 0; Trise:=0; Th:=1;
+        LPO.LuaPrint.Canvas.Pen.JoinStyle:= pjsMiter;
+        LPO.LuaPrint.Canvas.Pen.EndCap:= pecFlat;
         while sp^ <> #0 do begin
           while sp^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(sp);
           if sp^ = #0 then Break;
@@ -143,6 +145,14 @@ var
           end else if cm = 'ET' then begin
             bt := False;
             ss.Clear;
+          end else if cm = 'q' then begin
+            LPO.LuaPrint.PushCanvas;
+            LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+            ss.Clear;
+          end else if cm = 'Q' then begin
+            LPO.LuaPrint.PopCanvas;
+            LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+            ss.Clear;
           end else if cm = 'm' then begin
             xy := TDblXY.Create;
             xy.tst:= tstM;
@@ -159,15 +169,6 @@ var
             params.Add(xy);
             ss.Clear;
           end else if cm = 'c' then begin
-            if TDblXY(params[params.Count-1]).tst = tstM then begin
-              TDblXY(params[params.Count-1]).tst:= tstBez;
-            end else begin
-              xy := TDblXY.Create;
-              xy.tst:= tstBez;
-              xy.x:= TDblXY(params[params.Count-1]).x;
-              xy.y := TDblXY(params[params.Count-1]).y;
-              params.Add(xy);
-            end;
             xy := TDblXY.Create;
             xy.tst:= tstBez;
             xy.x:= StrToFloat(ss[ss.Count-6]);
@@ -185,7 +186,9 @@ var
             params.Add(xy);
             ss.Clear;
           end else if cm = 'h' then begin
-            if params.Count > 0 then begin
+            if (params.Count > 0) and
+             ((TDblXY(params[params.Count-1]).x <> sx) or
+              (TDblXY(params[params.Count-1]).y <> sy)) then begin
               if TDblXY(params[params.Count-1]).tst = tstBez then begin
                 xy := TDblXY.Create;
                 xy.tst:= tstM;
@@ -209,6 +212,25 @@ var
             xy.x:= StrToFloat(ss[ss.Count-2]);
             xy.y := StrToFloat(ss[ss.Count-1]);
             params.Add(xy);
+            ss.Clear;
+            ////////////////////////////////
+          end else if cm = 'J' then begin
+            case Trunc(StrToFloat(ss[ss.Count-1])) of
+              1: i:= Integer(pecRound);
+              2: i:= Integer(pecSquare);
+              else i:= Integer(pecFlat);
+            end;
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_EndCap(%d)', [i]));
+            LPO.LuaPrint.Canvas.Pen.EndCap:= TPenEndCap(i);
+            ss.Clear;
+          end else if cm = 'j' then begin
+            case Trunc(StrToFloat(ss[ss.Count-1])) of
+              1: i:= Integer(pjsRound);
+              2: i:= Integer(pjsBevel);
+              else i:= Integer(pjsMiter);
+            end;
+            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_JoinStyle(%d)', [i]));
+            LPO.LuaPrint.Canvas.Pen.JoinStyle:= TPenJoinStyle(i);
             ss.Clear;
             ////////////////////////////////
           end else if cm = 'G' then begin
@@ -243,6 +265,7 @@ var
           end else if cm = 'w' then begin
             i := Trunc(StrToFloat(ss[ss.Count-1]) * Rate);
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_width(%d)', [i]));
+            ss.Clear;
           ////////////////////////////////
           end else if cm = 'n' then begin
             // End the path object without filling or stroking it.
@@ -251,7 +274,9 @@ var
           end else if (cm = 'S') or (cm = 's') or (cm = 'f') or (cm = 'b') or
            (cm = 'f*') or (cm = 'b*') or (cm = 'B') or (cm = 'B*') then begin
             if params.Count > 0 then begin
-              if (cm = 's') or (cm = 'b') then begin
+              if ((cm = 's') or (cm = 'b')) and
+               ((TDblXY(params[params.Count-1]).x <> sx) or
+                (TDblXY(params[params.Count-1]).y <> sy)) then begin
                 if TDblXY(params[params.Count-1]).tst = tstBez then begin
                   xy := TDblXY.Create;
                   xy.tst:= tstM;
@@ -269,64 +294,68 @@ var
               while i < params.Count do begin
                 case TDblXY(params[i]).tst of
                   tstM: begin
-                    s1 := '';
-                    repeat
-                      sx := TDblXY(params[i]).x * Rate;
-                      sy := (PageH - TDblXY(params[i]).y) * Rate;
-                      s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
-                      Inc(i);
-                    until (i >= params.Count) or
-                     (TDblXY(params[i]).tst <> tstNone);
-                    Delete(s1, Length(s1), 1);
-                    if (cm = 's') or (cm = 'S') then begin
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)', [s1]));
-                    end else if (cm = 'b') or (cm = 'b*')
-                     or (cm = 'B') or (cm = 'B*') then begin
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-                       [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
-                       [s1, Integer((cm = 'b') or (cm = 'B'))]));
-                    end else begin
-                      LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                       [Integer(psSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                       [LPO.LuaPrint.Canvas.Brush.Color]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-                       [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)', [s1]));
-                      LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
-                    end;
-                  end;
-                  tstBez: begin
-                    s1 := '';
-                    repeat
-                      sx := TDblXY(params[i]).x * Rate;
-                      sy := (PageH - TDblXY(params[i]).y) * Rate;
-                      s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
-                      Inc(i);
-                    until (i >= params.Count) or
-                     (TDblXY(params[i]).tst <> tstBez);
-                    Delete(s1, Length(s1), 1);
-                    if (cm = 's') or (cm = 'S') then begin
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezierLine(%s)', [s1]));
-                    end else if (cm = 'b') or (cm = 'b*')
-                     or (cm = 'B') or (cm = 'B*') then begin
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-                       [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s,%d)',
-                       [s1, Integer((cm = 'b') or (cm = 'B'))]));
-                    end else begin
-                      LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                       [Integer(psSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                       [LPO.LuaPrint.Canvas.Brush.Color]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-                       [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s)',
-                       [s1]));
-                      LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+                    case TDblXY(params[i+1]).tst of
+                      tstBez: begin
+                        s1 := '';
+                        repeat
+                          sx := TDblXY(params[i]).x * Rate;
+                          sy := (PageH - TDblXY(params[i]).y) * Rate;
+                          s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
+                          Inc(i);
+                        until (i >= params.Count) or
+                         (TDblXY(params[i]).tst <> tstBez);
+                        Delete(s1, Length(s1), 1);
+                        if (cm = 's') or (cm = 'S') then begin
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezierLine(%s)', [s1]));
+                        end else if (cm = 'b') or (cm = 'b*')
+                         or (cm = 'B') or (cm = 'B*') then begin
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+                           [Integer(bsSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s,%d)',
+                           [s1, Integer((cm = 'b') or (cm = 'B'))]));
+                        end else begin
+                          LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
+                           [Integer(psSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                           [LPO.LuaPrint.Canvas.Brush.Color]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+                           [Integer(bsSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s)',
+                           [s1]));
+                          LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+                        end;
+                      end;
+                      else begin
+                        s1 := '';
+                        repeat
+                          sx := TDblXY(params[i]).x * Rate;
+                          sy := (PageH - TDblXY(params[i]).y) * Rate;
+                          s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
+                          Inc(i);
+                        until (i >= params.Count) or
+                         (TDblXY(params[i]).tst <> tstNone);
+                        Delete(s1, Length(s1), 1);
+                        if (cm = 's') or (cm = 'S') then begin
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyline(%s)', [s1]));
+                        end else if (cm = 'b') or (cm = 'b*')
+                         or (cm = 'B') or (cm = 'B*') then begin
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+                           [Integer(bsSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
+                           [s1, Integer((cm = 'b') or (cm = 'B'))]));
+                        end else begin
+                          LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
+                           [Integer(psSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
+                           [LPO.LuaPrint.Canvas.Brush.Color]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+                           [Integer(bsSolid)]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)', [s1]));
+                          LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+                        end;
+                      end;
                     end;
                   end;
                   tstRe: begin
@@ -360,8 +389,6 @@ var
                     end;
                     Inc(i, 2);
                   end;
-                  else
-                    Inc(i);
                 end;
               end;
               params.Clear;
