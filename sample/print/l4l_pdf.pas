@@ -321,8 +321,8 @@ var
                            [LPO.LuaPrint.Canvas.Brush.Color]));
                           LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                            [Integer(bsSolid)]));
-                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s)',
-                           [s1]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.PolyBezier(%s,%d)',
+                           [s1, Integer(cm = 'f')]));
                           LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
                         end;
                       end;
@@ -352,7 +352,8 @@ var
                            [LPO.LuaPrint.Canvas.Brush.Color]));
                           LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                            [Integer(bsSolid)]));
-                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s)', [s1]));
+                          LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%s,%d)',
+                           [s1, Integer(cm = 'f')]));
                           LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
                         end;
                       end;

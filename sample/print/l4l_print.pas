@@ -176,7 +176,7 @@ type
 
 implementation
 uses
-  LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf;
+  LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf, graphmath;
 
 const
   MM_P_INCH = 2540;
@@ -1014,13 +1014,24 @@ function TLuaPrintRunObject.l4l_PolyBezier: integer;
 var
   i, c: integer;
   p: array of TPoint;
+  pp: PPoint;
+  winding: boolean;
 begin
   c := lua_gettop(LS);
   SetLength(p, c div 2);
   for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+    p[i-1] := Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
   end;
-  LuaPrint.FCanvas.PolyBezier(p, True, True);
+  winding := False;
+  if c mod 2 = 1 then winding := lua_toboolean(LS, c);
+  pp:= AllocMem(0);
+  try
+    PolyBezier2Polyline(p, pp, c, True);
+    LuaPrint.FCanvas.Polygon(pp, c, winding);
+    //LuaPrint.FCanvas.PolyBezier(p, True, True);
+  finally
+    FreeMem(pp);
+  end;
   Result := 0;
 end;
 
@@ -1028,13 +1039,21 @@ function TLuaPrintRunObject.l4l_PolyBezierLine: integer;
 var
   i, c: integer;
   p: array of TPoint;
+  pp: PPoint;
 begin
   c := lua_gettop(LS);
   SetLength(p, c div 2);
   for i := 1 to c div 2 do begin
-    p[i-1] := Point(zx(lua_tointeger(LS, (i-1)*2+1)), zy(lua_tointeger(LS, (i-1)*2+2)));
+    p[i-1] := Point(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
   end;
-  LuaPrint.FCanvas.PolyBezier(p, False, True);
+  pp:= AllocMem(0);
+  try
+    PolyBezier2Polyline(p, pp, c, True);
+    LuaPrint.FCanvas.Polyline(pp, c);
+    //LuaPrint.FCanvas.PolyBezier(p, False, True);
+  finally
+    FreeMem(pp);
+  end;
   Result := 0;
 end;
 
