@@ -1001,6 +1001,7 @@ begin
     SetLength(PPP, 0);
     SetLength(PPC, 0);
   end;
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_AddBezierPoint: integer;
@@ -1018,24 +1019,29 @@ begin
     pp:= AllocMem(0);
     try
       PolyBezier2Polyline(p, pp, c, True);
+      l := Length(PPP);
+      SetLength(PPP, l + c);
+      for i := 1 to c do PPP[l+i-1] := (pp+i-1)^;
     finally
       FreeMem(pp);
     end;
-    l := Length(PPP);
-    SetLength(PPP, l + c);
-    for i := 1 to c do PPP[l+i-1] := (pp+i-1)^;
     SetLength(PPC, Length(PPC)+1);
     PPC[Length(PPC)-1] := c;
   end else begin
     SetLength(PPP, 0);
     SetLength(PPC, 0);
   end;
+  Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_Polygon: integer;
+var
+  i: integer;
 begin
 {$IFDEF WINDOWS}
-  SetPolyFillMode(LuaPrint.FCanvas.Handle, lua_tointeger(LS, 1));
+  i := ALTERNATE;
+  if lua_toboolean(LS, 1) then i := WINDING;
+  SetPolyFillMode(LuaPrint.FCanvas.Handle, i);
   PolyPolygon(LuaPrint.FCanvas.Handle, PPP, PPC, Length(PPC));
 {$ELSE}
   LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
