@@ -77,7 +77,7 @@ var
     ss: TStringList;
     params: TObjectList;
     i: integer;
-    s, s1, s2, cm, Tf: string;
+    s, cm, Tf: string;
     sx, sy, x1, y1, x2, y2: double;
     Tl, Tc, Tw, Tfs, Th, Trise: double;
     sp: PChar;
@@ -300,30 +300,30 @@ var
                     poly := True;
                     case TDblXY(params[i+1]).tst of
                       tstBez: begin
-                        s1 := '';
+                        s := '';
                         repeat
                           sx := TDblXY(params[i]).x * Rate;
                           sy := (PageH - TDblXY(params[i]).y) * Rate;
-                          s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
+                          s := s + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
                           Inc(i);
                         until (i >= params.Count) or
                          (TDblXY(params[i]).tst <> tstBez);
-                        Delete(s1, Length(s1), 1);
+                        Delete(s, Length(s), 1);
                         LPO.LuaPrint.AddOrder(
-                         Format(PRUN_NAME + '.AddBezierPoint(%s)', [s1]));
+                         Format(PRUN_NAME + '.AddBezierPoint(%s)', [s]));
                       end;
                       else begin
-                        s1 := '';
+                        s := '';
                         repeat
                           sx := TDblXY(params[i]).x * Rate;
                           sy := (PageH - TDblXY(params[i]).y) * Rate;
-                          s1 := s1 + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
+                          s := s + Format('%d,%d,', [Trunc(sx), Trunc(sy)]);
                           Inc(i);
                         until (i >= params.Count) or
                          (TDblXY(params[i]).tst <> tstNone);
-                        Delete(s1, Length(s1), 1);
+                        Delete(s, Length(s), 1);
                         LPO.LuaPrint.AddOrder(
-                         Format(PRUN_NAME + '.AddPolyPoint(%s)', [s1]));
+                         Format(PRUN_NAME + '.AddPolyPoint(%s)', [s]));
                       end;
                     end;
                   end;
@@ -332,19 +332,19 @@ var
                     y1 := TDblXY(params[i]).y;
                     x2 := TDblXY(params[i+1]).x;
                     y2 := TDblXY(params[i+1]).y;
-                    s1:= Format('%d,%d,%d,%d',
+                    s:= Format('%d,%d,%d,%d',
                      [Trunc(x1 * Rate), Trunc((PageH-y1) * Rate),
                       Trunc((x1+x2) * Rate), Trunc((PageH-y1-y2) * Rate)]);
 
                     if (cm = 's') or (cm = 'S') then begin
                       LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                        [Integer(bsClear)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
+                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s]));
                     end else if (cm = 'b') or (cm = 'b*')
                      or (cm = 'B') or (cm = 'B*') then begin
                       LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                        [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
+                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s]));
                     end else begin
                       LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
                       LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
@@ -353,7 +353,7 @@ var
                        [LPO.LuaPrint.Canvas.Brush.Color]));
                       LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                        [Integer(bsSolid)]));
-                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s1]));
+                      LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.rectangle(%s)', [s]));
                       LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
                     end;
                     Inc(i, 2);
@@ -444,11 +444,11 @@ var
             Tfs := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
           end else if cm = 'Tj' then begin
-            s1 := ss[ss.Count-1];
-            if s1[1] = '(' then begin
-              Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
-            end else if s1[1] = '<' then begin
-              Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
+            s := ss[ss.Count-1];
+            if s[1] = '(' then begin
+              Delete(s, 1, 1); Delete(s, Length(s), 1);
+            end else if s[1] = '<' then begin
+              Delete(s, 1, 1); Delete(s, Length(s), 1);
               //s1 := StringOfChar('*', Length(s1) div 4) + Format('%d', [Length(s1) div 4]);
             end;
             m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
@@ -460,15 +460,15 @@ var
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s1]));
+             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s]));
             ss.Clear;
           end else if cm = 'TJ' then begin // ToDo
-            s1 := ss[ss.Count-1];
-            Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
-            if s1[1] = '(' then begin
-              Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
-            end else if s1[1] = '<' then begin
-              Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
+            s := ss[ss.Count-1];
+            Delete(s, 1, 1); Delete(s, Length(s), 1);
+            if s[1] = '(' then begin
+              Delete(s, 1, 1); Delete(s, Length(s), 1);
+            end else if s[1] = '<' then begin
+              Delete(s, 1, 1); Delete(s, Length(s), 1);
               //s1 := StringOfChar('*', Length(s1) div 4) + Format('%d', [Length(s1) div 4]);
             end;
             m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
@@ -480,7 +480,7 @@ var
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s1]));
+             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s]));
             ss.Clear;
           end else
             ss.Add(cm);
@@ -513,7 +513,7 @@ const
   ZBUF_LEN = 10000;
 var
   sl: TStringList; // for debug
-  i, p1, p2, len, curpage: integer;
+  i, p1, len, curpage: integer;
   src, s, s1, obj, cmd: string;
   sp, sp1, sp2: PChar;
   z: TZStream;
