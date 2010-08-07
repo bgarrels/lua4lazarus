@@ -1,73 +1,70 @@
 <?xml version="1.0"?>
 <CONFIG>
   <ProjectOptions>
+    <Version Value="9"/>
     <PathDelim Value="\"/>
-    <Version Value="8"/>
     <General>
       <Flags>
         <UseDefaultCompilerOptions Value="True"/>
       </Flags>
-      <SessionStorage Value="InProjectDir"/>
-      <MainUnit Value="0"/>
-      <TargetFileExt Value=".exe"/>
-      <Title Value="sample1"/>
       <ResourceType Value="res"/>
       <UseXPManifest Value="True"/>
       <Icon Value="0"/>
+      <ActiveWindowIndexAtStart Value="0"/>
     </General>
+    <i18n>
+      <EnableI18N LFM="False"/>
+    </i18n>
     <VersionInfo>
-      <Language Value=""/>
-      <CharSet Value=""/>
-      <StringTable Comments="" CompanyName="" FileDescription="" FileVersion="" InternalName="" LegalCopyright="" LegalTrademarks="" OriginalFilename="" ProductName="" ProductVersion=""/>
+      <StringTable ProductVersion=""/>
     </VersionInfo>
     <PublishOptions>
       <Version Value="2"/>
-      <IgnoreBinaries Value="False"/>
       <IncludeFileFilter Value="*.(pas|pp|inc|lfm|lpr|lrs|lpi|lpk|sh|xml)"/>
       <ExcludeFileFilter Value="*.(bak|ppu|ppw|o|so);*~;backup"/>
     </PublishOptions>
     <RunParams>
       <local>
         <FormatVersion Value="1"/>
-        <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T 'Lazarus Run Output' -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
       </local>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="2">
       <Item1>
         <PackageName Value="DBFLaz"/>
-        <MinVersion Minor="1" Release="1" Valid="True"/>
       </Item1>
       <Item2>
-        <PackageName Value="FCL"/>
-        <MinVersion Major="1" Valid="True"/>
-      </Item2>
-      <Item3>
         <PackageName Value="LCL"/>
-      </Item3>
+      </Item2>
     </RequiredPackages>
     <Units Count="2">
       <Unit0>
-        <Filename Value="sample1.pas"/>
+        <Filename Value="sample1.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="sample1"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="0"/>
+        <WindowIndex Value="0"/>
+        <TopLine Value="1"/>
+        <CursorPos X="1" Y="1"/>
+        <UsageCount Value="20"/>
+        <Loaded Value="True"/>
       </Unit0>
       <Unit1>
         <Filename Value="sample1_unit1.pas"/>
         <IsPartOfProject Value="True"/>
-        <ComponentName Value="Form1"/>
-        <ResourceBaseClass Value="Form"/>
-        <UnitName Value="sample1_Unit1"/>
+        <HasResources Value="True"/>
+        <UnitName Value="sample1_unit1"/>
+        <UsageCount Value="20"/>
       </Unit1>
     </Units>
+    <JumpHistory Count="0" HistoryIndex="-1"/>
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="9"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="sample1"/>
+      <Filename Value="project1"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir)\"/>
       <OtherUnitFiles Value="..\"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
