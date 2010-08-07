@@ -11,10 +11,15 @@ unit l4l_print;
 
 {$mode objfpc}{$H+}
 
+{$DEFINE USE_AGG}
+
 interface
 
 uses
   Classes, SysUtils, contnrs, graphics, printers, types,
+{$IFDEF USE_AGG}
+  agg_lcl,
+{$ENDIF}
   lua, l4l_object;
 
 type
