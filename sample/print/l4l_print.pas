@@ -7,6 +7,8 @@ unit l4l_print;
     License: New BSD
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
+  ToDo:
+   リージョン
 }
 
 {$mode objfpc}{$H+}
@@ -17,9 +19,6 @@ interface
 
 uses
   Classes, SysUtils, contnrs, graphics, printers, types,
-{$IFDEF USE_AGG}
-  agg_lcl,
-{$ENDIF}
   lua, l4l_object;
 
 type
@@ -184,6 +183,9 @@ uses
 {$IFDEF WINDOWS}
   windows,
 {$ENDIF}
+{$IFDEF USE_AGG}
+  agg_lcl, agg_fpimage, fpcanvas, agg_color, agg_render_scanlines,
+{$ENDIF}
   LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf, graphmath;
 
 const
@@ -192,12 +194,21 @@ const
 
 type
 
+{$IFDEF USE_AGG}
+  TMyAggCanvas = class(TAggLCLCanvas)
+  end;
+{$ENDIF}
+
   { TLuaPrintRunObject }
 
   TLuaPrintRunObject  = class(TLuaObject)
   private
+{$IFDEF USE_AGG}
+    AggLCLCanvas: TMyAggCanvas;
+{$ELSE}
     PPP: array of TPoint;
     PPC: array of integer;
+{$ENDIF}
   protected
     LuaPrint: TLuaPrint;
     function w(i: integer): integer;
@@ -214,6 +225,7 @@ type
     function l4l_AddPolyPoint: integer;
     function l4l_AddBezierPoint: integer;
     function l4l_Polygon: integer;
+    function l4l_Polyfill: integer;
     function l4l_Polyline: integer;
     function l4l_DrawImage: integer;
     function l4l_font_color: integer;
@@ -232,6 +244,9 @@ type
     function l4l_PushCanvas: integer;
     function l4l_PopCanvas: integer;
     function l4l_SetClipRect: integer;
+{$IFDEF USE_AGG}
+    function l4l_DrawAggCanvas: integer;
+{$ENDIF}
   end;
 
 { TLuaPrint }
@@ -360,6 +375,10 @@ begin
     if TStringList(FPageList[FPageList.Count-1]).Count = 0 then begin
       FPageList.Delete(FPageList.Count-1);
       FBmpList.Delete(FBmpList.Count-1);
+{$IFDEF USE_AGG}
+    end else begin
+      AddOrder(PRUN_NAME + '.DrawAggCanvas()');
+{$ENDIF}
     end;
   end;
   FCanvas := nil;
@@ -369,6 +388,9 @@ procedure TLuaPrint.NewPage;
 var
   bmp: graphics.TBitmap;
 begin
+{$IFDEF USE_AGG}
+  AddOrder(PRUN_NAME + '.DrawAggCanvas()');
+{$ENDIF}
   FPageList.Add(TStringList.Create);
   bmp := graphics.TBitmap.Create;
   FBmpList.Add(bmp);
@@ -931,10 +953,23 @@ constructor TLuaPrintRunObject.Create(L: Plua_State; lp: TLuaPrint);
 begin
   inherited Create(L);
   LuaPrint:= lp;
+{$IFDEF USE_AGG}
+  AggLCLCanvas:= TMyAggCanvas.Create;
+  AggLCLCanvas.Image.PixelFormat:= afpimRGBA32;
+  AggLCLCanvas.Image.SetSize(Printer.PageWidth, Printer.PageHeight);
+  AggLCLCanvas.Brush.Color:= clWhite;
+  AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
+  AggLCLCanvas.Brush.Color:= clBlack;
+  AggLCLCanvas.Pen.Color:= clBlack;
+  AggLCLCanvas.Path.m_path.remove_all;
+{$ENDIF}
 end;
 
 destructor TLuaPrintRunObject.Destroy;
 begin
+{$IFDEF USE_AGG}
+  AggLCLCanvas.Free;
+{$ENDIF}
   inherited Destroy;
 end;
 
@@ -995,6 +1030,12 @@ var
 begin
   c := lua_gettop(LS);
   if c > 0 then begin
+{$IFDEF USE_AGG}
+    AggLCLCanvas.Path.m_path.move_to(zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)));
+    for i := 2 to c div 2 do begin
+      AggLCLCanvas.Path.m_path.line_to(zx(lua_tointeger(LS, i*2-1)), zy(lua_tointeger(LS, i*2)));
+    end;
+{$ELSE}
     l := Length(PPP);
     SetLength(PPP, l + c div 2);
     for i := 1 to c div 2 do begin
@@ -1002,9 +1043,14 @@ begin
     end;
     SetLength(PPC, Length(PPC)+1);
     PPC[Length(PPC)-1] := c div 2;
+{$ENDIF}
   end else begin
+{$IFDEF USE_AGG}
+    AggLCLCanvas.Path.m_path.remove_all;
+{$ELSE}
     SetLength(PPP, 0);
     SetLength(PPC, 0);
+{$ENDIF}
   end;
   Result := 0;
 end;
@@ -1024,17 +1070,28 @@ begin
     pp:= AllocMem(0);
     try
       PolyBezier2Polyline(p, pp, c, True);
+{$IFDEF USE_AGG}
+      AggLCLCanvas.Path.m_path.move_to(pp^.x, pp^.y);
+      for i := 2 to c do begin
+        AggLCLCanvas.Path.m_path.line_to((pp+i-1)^.x, (pp+i-1)^.y);
+      end;
+{$ELSE}
       l := Length(PPP);
       SetLength(PPP, l + c);
       for i := 1 to c do PPP[l+i-1] := (pp+i-1)^;
+      SetLength(PPC, Length(PPC)+1);
+      PPC[Length(PPC)-1] := c;
+{$ENDIF}
     finally
       FreeMem(pp);
     end;
-    SetLength(PPC, Length(PPC)+1);
-    PPC[Length(PPC)-1] := c;
   end else begin
+{$IFDEF USE_AGG}
+    AggLCLCanvas.Path.m_path.remove_all;
+{$ELSE}
     SetLength(PPP, 0);
     SetLength(PPC, 0);
+{$ENDIF}
   end;
   Result := 0;
 end;
@@ -1043,25 +1100,86 @@ function TLuaPrintRunObject.l4l_Polygon: integer;
 var
   i: integer;
 begin
-{$IFDEF WINDOWS}
+{$IFDEF USE_AGG}
+  AggLCLCanvas.AggDrawPath(AGG_FillAndStroke);
+{$ELSE}
+  {$IFDEF WINDOWS}
   i := ALTERNATE;
   if lua_toboolean(LS, 1) then i := WINDING;
   SetPolyFillMode(LuaPrint.FCanvas.Handle, i);
   PolyPolygon(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
-{$ELSE}
+  {$ELSE}
   // ToDo
   LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
+  {$ENDIF}
+{$ENDIF}
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_PolyFill: integer;
+var
+{$IFDEF USE_AGG}
+  clr: aggclr;
+{$ELSE}
+  i: integer;
+  ps: TPenStyle;
+{$ENDIF}
+begin
+{$IFDEF USE_AGG}
+  //AggLCLCanvas.Pen.AggColor :=
+  // FPToAggColor(TColorToFPColor(clBlack));
+  AggLCLCanvas.AggDrawPath(AGG_FillAndStroke);
+  Exit;
+  AggLCLCanvas.Pen.AggLineWidth:= 1;
+  AggLCLCanvas.m_rasterizer.reset;
+  //{
+  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_strokeTransform);
+  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_pathTransform);
+  clr.Construct(AggLCLCanvas.Brush.AggColor);
+  AggLCLCanvas.m_renSolid.color_(@clr);
+  render_scanlines(
+   @AggLCLCanvas.m_rasterizer,
+   @AggLCLCanvas.m_scanline, @AggLCLCanvas.m_renSolid);
+  //}
+  //AggLCLCanvas.render(true);
+
+  {
+  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_strokeTransform);
+  clr.Construct(AggLCLCanvas.Pen.AggColor);
+  AggLCLCanvas.m_renSolid.color_(@clr);
+  render_scanlines(
+   @AggLCLCanvas.m_rasterizer,
+   @AggLCLCanvas.m_scanline, @AggLCLCanvas.m_renSolid);
+  }
+  //AggLCLCanvas.render(false);
+{$ELSE}
+  {$IFDEF WINDOWS}
+  i := ALTERNATE;
+  if lua_toboolean(LS, 1) then i := WINDING;
+  SetPolyFillMode(LuaPrint.FCanvas.Handle, i);
+  ps := LuaPrint.FCanvas.Pen.Style;
+  LuaPrint.FCanvas.Pen.Style:= psClear;
+  PolyPolygon(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
+  LuaPrint.FCanvas.Pen.Style:= ps;
+  {$ELSE}
+  // ToDo
+  LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
+  {$ENDIF}
 {$ENDIF}
   Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
 begin
-{$IFDEF WINDOWS}
-  PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
+{$IFDEF USE_AGG}
+  //AggLCLCanvas.AggDrawPath(AGG_StrokeOnly);
 {$ELSE}
+  {$IFDEF WINDOWS}
+  PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
+  {$ELSE}
   // ToDo
   LuaPrint.FCanvas.Polyline(PPP);
+  {$ENDIF}
 {$ENDIF}
   Result := 0;
 end;
@@ -1135,6 +1253,10 @@ end;
 function TLuaPrintRunObject.l4l_pen_color: integer;
 begin
   LuaPrint.FCanvas.Pen.Color := TColor(lua_tointeger(LS, 1));
+{$IFDEF USE_AGG}
+  AggLCLCanvas.Pen.AggColor:=
+   FPToAggColor(TColorToFPColor(lua_tointeger(LS, 1)));
+{$ENDIF}
   Result := 0;
 end;
 
@@ -1165,12 +1287,21 @@ end;
 function TLuaPrintRunObject.l4l_pen_width: integer;
 begin
   LuaPrint.FCanvas.Pen.Width:= w(lua_tointeger(LS, 1));
+{$IFDEF USE_AGG}
+  AggLCLCanvas.Pen.AggLineWidth:= w(lua_tointeger(LS, 1));
+  if AggLCLCanvas.Pen.AggLineWidth < 1 then
+    AggLCLCanvas.Pen.AggLineWidth := 1;
+{$ENDIF}
   Result := 0;
 end;
 
 function TLuaPrintRunObject.l4l_brush_color: integer;
 begin
   LuaPrint.FCanvas.Brush.Color := TColor(lua_tointeger(LS, 1));
+{$IFDEF USE_AGG}
+  AggLCLCanvas.Brush.AggColor:=
+   FPToAggColor(TColorToFPColor(lua_tointeger(LS, 1)));
+{$ENDIF}
   Result := 0;
 end;
 
@@ -1199,6 +1330,27 @@ begin
         lua_tointeger(LS, 3), lua_tointeger(LS, 4));
   Result := 0;
 end;
+
+{$IFDEF USE_AGG}
+function TLuaPrintRunObject.l4l_DrawAggCanvas: integer;
+var
+  bmp: graphics.TBitmap;
+begin
+  bmp := graphics.TBitmap.Create;
+  try
+    bmp.LoadFromIntfImage(AggLCLCanvas.Image.IntfImg);
+    LuaPrint.FCanvas.Draw(0, 0, bmp);
+  finally
+    bmp.Free;
+  end;
+  AggLCLCanvas.Brush.Color:=clWhite;
+  AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
+  AggLCLCanvas.Brush.Color:=clBlack;
+  AggLCLCanvas.Pen.Color:=clBlack;
+  AggLCLCanvas.Path.m_path.remove_all;
+  Result := 0;
+end;
+{$ENDIF}
 
 end.
 
