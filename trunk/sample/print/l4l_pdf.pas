@@ -371,16 +371,10 @@ var
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%d)',
                    [Integer((cm = 'b') or (cm = 'B'))]));
                 end else begin
-                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_style(%d)',
-                   [Integer(psClear)]));
-                  //LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.pen_color(%d)',
-                  // [LPO.LuaPrint.Canvas.Brush.Color]));
                   LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                    [Integer(bsSolid)]));
-                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polygon(%d)',
+                  LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.polyfill(%d)',
                    [Integer(cm = 'f')]));
-                  LPO.LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
                 end;
                 LPO.LuaPrint.AddOrder(PRUN_NAME + '.AddPolyPoint()');
               end;
