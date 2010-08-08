@@ -13,7 +13,7 @@ unit l4l_print;
 
 {$mode objfpc}{$H+}
 
-{.$DEFINE USE_AGG}
+{$DEFINE USE_AGG}
 
 interface
 
@@ -989,6 +989,16 @@ begin
   y1:= zy(lua_tointeger(LS, 2));
   x2:= zx(lua_tointeger(LS, 3));
   y2:= zy(lua_tointeger(LS, 4));
+//{$IFDEF USE_AGG}
+//  AggLCLCanvas.Pen.AggLineWidth:=1;
+//  if x1 = x2 then begin
+//    AggLCLCanvas.AggLine(x1, y1, x1, y2);
+//  end else if y1 = y2 then begin
+//    AggLCLCanvas.AggLine(x1, y1, x2, y1);
+//  end else begin
+//    AggLCLCanvas.AggRectangle(x1, y1, x2, y2);
+//  end;
+//{$ELSE}
   if x1 = x2 then begin
     LuaPrint.FCanvas.Line(x1, y1, x1, y2);
   end else if y1 = y2 then begin
@@ -996,6 +1006,7 @@ begin
   end else begin
     LuaPrint.FCanvas.Rectangle(x1, y1, x2, y2);
   end;
+//{$ENDIF}
   Result := 0;
 end;
 
@@ -1116,15 +1127,24 @@ begin
 end;
 
 function TLuaPrintRunObject.l4l_PolyFill: integer;
-{$IFDEF USE_AGG}
-{$ELSE}
 var
+{$IFDEF USE_AGG}
+  bmp: graphics.TBitmap;
+{$ELSE}
   i: integer;
   ps: TPenStyle;
 {$ENDIF}
 begin
 {$IFDEF USE_AGG}
-  AggLCLCanvas.AggDrawPath(AGG_FillOnly);
+  bmp := graphics.TBitmap.Create;
+  try
+    AggLCLCanvas.AggDrawPath(AGG_FillOnly);
+    bmp.LoadFromIntfImage(AggLCLCanvas.Image.IntfImg);
+    LuaPrint.FCanvas.Draw(0, 0, bmp);
+    AggLCLCanvas.Erase;
+  finally
+    bmp.Free;
+  end;
 {$ELSE}
   {$IFDEF WINDOWS}
   i := ALTERNATE;
@@ -1143,9 +1163,22 @@ begin
 end;
 
 function TLuaPrintRunObject.l4l_Polyline: integer;
+{$IFDEF USE_AGG}
+var
+  bmp: graphics.TBitmap;
+{$ELSE}
+{$ENDIF}
 begin
 {$IFDEF USE_AGG}
-  AggLCLCanvas.AggDrawPath(AGG_StrokeOnly);
+  bmp := graphics.TBitmap.Create;
+  try
+    AggLCLCanvas.AggDrawPath(AGG_StrokeOnly);
+    bmp.LoadFromIntfImage(AggLCLCanvas.Image.IntfImg);
+    LuaPrint.FCanvas.Draw(0, 0, bmp);
+    AggLCLCanvas.Erase;
+  finally
+    bmp.Free;
+  end;
 {$ELSE}
   {$IFDEF WINDOWS}
   PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
@@ -1309,6 +1342,7 @@ function TLuaPrintRunObject.l4l_DrawAggCanvas: integer;
 var
   bmp: graphics.TBitmap;
 begin
+  Exit;
   bmp := graphics.TBitmap.Create;
   try
     bmp.LoadFromIntfImage(AggLCLCanvas.Image.IntfImg);
@@ -1317,6 +1351,7 @@ begin
     bmp.Free;
   end;
   AggLCLCanvas.Erase;
+  AggLCLCanvas.ClearSettings;
   //AggLCLCanvas.Brush.Color:=clRed;
   //AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
   //AggLCLCanvas.Brush.Color:=clBlack;
