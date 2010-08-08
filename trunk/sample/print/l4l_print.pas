@@ -13,7 +13,7 @@ unit l4l_print;
 
 {$mode objfpc}{$H+}
 
-{$DEFINE USE_AGG}
+{.$DEFINE USE_AGG}
 
 interface
 
@@ -184,7 +184,7 @@ uses
   windows,
 {$ENDIF}
 {$IFDEF USE_AGG}
-  agg_lcl, agg_fpimage, fpcanvas, agg_color, agg_render_scanlines,
+  agg_lcl, agg_fpimage, fpcanvas, agg_color,
 {$ENDIF}
   LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf, graphmath;
 
@@ -956,11 +956,12 @@ begin
 {$IFDEF USE_AGG}
   AggLCLCanvas:= TMyAggCanvas.Create;
   AggLCLCanvas.Image.PixelFormat:= afpimRGBA32;
-  AggLCLCanvas.Image.SetSize(Printer.PageWidth, Printer.PageHeight);
-  AggLCLCanvas.Brush.Color:= clWhite;
-  AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
-  AggLCLCanvas.Brush.Color:= clBlack;
-  AggLCLCanvas.Pen.Color:= clBlack;
+  AggLCLCanvas.Image.SetSize(LuaPrint.FCanvas.Width, LuaPrint.FCanvas.Height);
+  //AggLCLCanvas.Font.PixelsPerInch:= LuaPrint.FCanvas.Font.PixelsPerInch;
+  //AggLCLCanvas.Brush.Color:= clred;
+  //AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
+  //AggLCLCanvas.Brush.Color:= clBlack;
+  //AggLCLCanvas.Pen.Color:= clBlack;
   AggLCLCanvas.Path.m_path.remove_all;
 {$ENDIF}
 end;
@@ -993,9 +994,7 @@ begin
   end else if y1 = y2 then begin
     LuaPrint.FCanvas.Line(x1, y1, x2, y1);
   end else begin
-    LuaPrint.FCanvas.Rectangle(
-     zx(lua_tointeger(LS, 1)), zy(lua_tointeger(LS, 2)),
-     zx(lua_tointeger(LS, 3)), zy(lua_tointeger(LS, 4)));
+    LuaPrint.FCanvas.Rectangle(x1, y1, x2, y2);
   end;
   Result := 0;
 end;
@@ -1117,41 +1116,15 @@ begin
 end;
 
 function TLuaPrintRunObject.l4l_PolyFill: integer;
-var
 {$IFDEF USE_AGG}
-  clr: aggclr;
 {$ELSE}
+var
   i: integer;
   ps: TPenStyle;
 {$ENDIF}
 begin
 {$IFDEF USE_AGG}
-  //AggLCLCanvas.Pen.AggColor :=
-  // FPToAggColor(TColorToFPColor(clBlack));
-  AggLCLCanvas.AggDrawPath(AGG_FillAndStroke);
-  Exit;
-  AggLCLCanvas.Pen.AggLineWidth:= 1;
-  AggLCLCanvas.m_rasterizer.reset;
-  //{
-  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_strokeTransform);
-  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_pathTransform);
-  clr.Construct(AggLCLCanvas.Brush.AggColor);
-  AggLCLCanvas.m_renSolid.color_(@clr);
-  render_scanlines(
-   @AggLCLCanvas.m_rasterizer,
-   @AggLCLCanvas.m_scanline, @AggLCLCanvas.m_renSolid);
-  //}
-  //AggLCLCanvas.render(true);
-
-  {
-  AggLCLCanvas.m_rasterizer.add_path(@AggLCLCanvas.m_strokeTransform);
-  clr.Construct(AggLCLCanvas.Pen.AggColor);
-  AggLCLCanvas.m_renSolid.color_(@clr);
-  render_scanlines(
-   @AggLCLCanvas.m_rasterizer,
-   @AggLCLCanvas.m_scanline, @AggLCLCanvas.m_renSolid);
-  }
-  //AggLCLCanvas.render(false);
+  AggLCLCanvas.AggDrawPath(AGG_FillOnly);
 {$ELSE}
   {$IFDEF WINDOWS}
   i := ALTERNATE;
@@ -1172,7 +1145,7 @@ end;
 function TLuaPrintRunObject.l4l_Polyline: integer;
 begin
 {$IFDEF USE_AGG}
-  //AggLCLCanvas.AggDrawPath(AGG_StrokeOnly);
+  AggLCLCanvas.AggDrawPath(AGG_StrokeOnly);
 {$ELSE}
   {$IFDEF WINDOWS}
   PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
@@ -1343,10 +1316,11 @@ begin
   finally
     bmp.Free;
   end;
-  AggLCLCanvas.Brush.Color:=clWhite;
-  AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
-  AggLCLCanvas.Brush.Color:=clBlack;
-  AggLCLCanvas.Pen.Color:=clBlack;
+  AggLCLCanvas.Erase;
+  //AggLCLCanvas.Brush.Color:=clRed;
+  //AggLCLCanvas.FillRect(0,0,AggLCLCanvas.Width,AggLCLCanvas.Height);
+  //AggLCLCanvas.Brush.Color:=clBlack;
+  //AggLCLCanvas.Pen.Color:=clBlack;
   AggLCLCanvas.Path.m_path.remove_all;
   Result := 0;
 end;
