@@ -205,7 +205,7 @@ type
 {$IFDEF USE_AGG}
     AggLCLCanvas: TMyAggCanvas;
     rx1, ry1, rx2, ry2: integer;
-    procedure poly_sub(flag: TAggDrawPathFlag);
+    procedure poly_sub(flag: TAggDrawPathFlag; w: boolean);
 {$ELSE}
     PPP: array of TPoint;
     PPC: array of integer;
@@ -1110,7 +1110,7 @@ begin
 end;
 
 {$IFDEF USE_AGG}
-procedure TLuaPrintRunObject.poly_sub(flag: TAggDrawPathFlag);
+procedure TLuaPrintRunObject.poly_sub(flag: TAggDrawPathFlag; w: boolean);
 var
   i: integer;
   bmp: graphics.TBitmap;
@@ -1133,6 +1133,7 @@ begin
       pjsMiter: AggLCLCanvas.Pen.AggLineJoin:= AGG_JoinMiter;
     end;
     AggLCLCanvas.Brush.Color:= LuaPrint.FCanvas.Brush.Color;
+    AggLCLCanvas.Brush.AggFillEvenOdd:= not w;
     AggLCLCanvas.Image.SetSize(rx2-rx1+1+lw*2, ry2-ry1+1+lw*2);
     AggLCLCanvas.Erase;
     for i := 0 to AggLCLCanvas.Path.m_path.total_vertices-1 do begin
@@ -1157,7 +1158,7 @@ var
 {$ENDIF}
 begin
 {$IFDEF USE_AGG}
-  poly_sub(AGG_FillAndStroke);
+  poly_sub(AGG_FillAndStroke, lua_toboolean(LS, 1));
 {$ELSE}
   {$IFDEF WINDOWS}
   i := ALTERNATE;
@@ -1181,7 +1182,7 @@ var
 {$ENDIF}
 begin
 {$IFDEF USE_AGG}
-  poly_sub(AGG_FillOnly);
+  poly_sub(AGG_FillOnly, lua_toboolean(LS, 1));
 {$ELSE}
   {$IFDEF WINDOWS}
   i := ALTERNATE;
@@ -1202,7 +1203,7 @@ end;
 function TLuaPrintRunObject.l4l_Polyline: integer;
 begin
 {$IFDEF USE_AGG}
-  poly_sub(AGG_StrokeOnly);
+  poly_sub(AGG_StrokeOnly, False);
 {$ELSE}
   {$IFDEF WINDOWS}
   PolyPolyline(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
