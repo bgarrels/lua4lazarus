@@ -945,6 +945,7 @@ begin
 {$IFDEF USE_AGG}
   AggLCLCanvas:= TMyAggCanvas.Create;
   AggLCLCanvas.Image.PixelFormat:= afpimRGBA32;
+  AggLCLCanvas.AggAntiAliasGamma:= 1.0;
   rx1:= MaxInt; ry1 := MaxInt; rx2 := 0; ry2 := 0;
 {$ENDIF}
 end;
@@ -1167,7 +1168,7 @@ begin
   PolyPolygon(LuaPrint.FCanvas.Handle, PPP[0], PPC[0], Length(PPC));
   {$ELSE}
   // ToDo
-  LuaPrint.FCanvas.Polygon(PPP, lua_toboolean(LS, 1));
+  LuaPrint.FCanvas.Pen  .Polygon(PPP, lua_toboolean(LS, 1));
   {$ENDIF}
 {$ENDIF}
   Result := 0;
