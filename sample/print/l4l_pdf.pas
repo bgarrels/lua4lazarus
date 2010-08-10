@@ -7,6 +7,9 @@ unit l4l_pdf;
     License: New BSD
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
+
+  ToDo:
+    /Type/ObjStm .
 }
 
 {$mode objfpc}{$H+}
@@ -154,14 +157,14 @@ var
   var
     ss: TStringList;
     params: TObjectList;
-    i, Tf_index: integer;
-    s, cm, Tf: string;
+    i, j, Tf_index: integer;
+    s, s1, cm, Tf: string;
     sx, sy, x1, y1, x2, y2: double;
     Tl, Tc, Tw, Tfs, Th, Trise: double;
     sp: PChar;
     xy: TDblXY;
     bt: boolean;
-    Tm, m1, m2: TMatrix;
+    Tlm, Tm, m1, m2: TMatrix;
     c: char;
     poly: boolean;
   begin
@@ -218,6 +221,9 @@ var
 
           if cm = 'BT' then begin
             bt := True;
+            Tlm[1][1] := 1; Tlm[1][2]:=0;Tlm[1][3]:=0;
+            Tlm[2][1] := 0; Tlm[2][2]:=1;Tlm[2][3]:=0;
+            Tlm[3][1] := 0; Tlm[3][2]:=0;Tlm[3][3]:=1;
             Tm[1][1] := 1; Tm[1][2]:=0;Tm[1][3]:=0;
             Tm[2][1] := 0; Tm[2][2]:=1;Tm[2][3]:=0;
             Tm[3][1] := 0; Tm[3][2]:=0;Tm[3][3]:=1;
@@ -470,6 +476,7 @@ var
             Tm[3][1] := StrToFloat(ss[ss.Count-2]); // e = x
             Tm[3][2] := StrToFloat(ss[ss.Count-1]); // f = y
             Tm[3][3] := 1;
+            Tlm := Tm;
             ss.Clear;
           end else if cm = 'Td' then begin
             m1[1][1] := 1; m1[1][2] := 0; m1[1][3] := 0;
@@ -477,7 +484,8 @@ var
             m1[3][1] := StrToFloat(ss[ss.Count-2]);
             m1[3][2] := StrToFloat(ss[ss.Count-1]);
             m1[3][3] := 1;
-            Tm := matrixmul(m1, Tm);
+            Tlm := matrixmul(m1, Tlm);
+            Tm := Tlm;
             ss.Clear;
           end else if cm = 'TD' then begin
             m1[1][1] := 1; m1[1][2] := 0; m1[1][3] := 0;
@@ -485,7 +493,8 @@ var
             m1[3][1] := StrToFloat(ss[ss.Count-2]);
             m1[3][2] := StrToFloat(ss[ss.Count-1]);
             m1[3][3] := 1;
-            Tm := matrixmul(m1, Tm);
+            Tlm := matrixmul(m1, Tlm);
+            Tm := Tlm;
             Tl := m1[3][2];
             ss.Clear;
           end else if cm = 'T*' then begin
@@ -494,7 +503,8 @@ var
             m1[3][1] := 0;
             m1[3][2] := Tl;
             m1[3][3] := 1;
-            Tm := matrixmul(m1, Tm);
+            Tlm := matrixmul(m1, Tlm);
+            Tm := Tlm;
             ss.Clear;
           end else if cm = 'TL' then begin
             Tl := StrToFloat(ss[ss.Count-1]);
@@ -535,26 +545,60 @@ var
              [Integer(bsClear)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
              [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s]));
+
+            m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+            m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+            m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s)+Tc+Tw)*Th;
+            m1[3][2]:= 0; m1[3][3]:= 1;
+            Tm := matrixmul(m1, Tm);
             ss.Clear;
-          end else if cm = 'TJ' then begin // ToDo
+          end else if cm = 'TJ' then begin
             s := ss[ss.Count-1];
             Delete(s, 1, 1); Delete(s, Length(s), 1);
-            if s[1] = '(' then begin
-              Delete(s, 1, 1); Delete(s, Length(s), 1);
-            end else if s[1] = '<' then begin
-              Delete(s, 1, 1); Delete(s, Length(s), 1);
-              //s1 := StringOfChar('*', Length(s1) div 4) + Format('%d', [Length(s1) div 4]);
+            i := 1;
+            while i <= Length(s) do begin
+              j := i;
+              if s[j] = '(' then begin
+                Inc(i);
+                while (i <= Length(s)) and (s[i] <> ')') do Inc(i);
+                s1 := Copy(s, j+1, i-j-1);
+                Inc(i);
+              end else if s[j] = '<' then begin
+                Inc(i);
+                while (i <= Length(s)) and (s[i] <> '>') do Inc(i);
+                s1 := Copy(s, j+1, i-j-1);
+                Inc(i);
+                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil) then
+                  s1 := TFontObj(fonts.Objects[Tf_index]).cid2utf8(s1);
+              end else begin
+                while (i <= Length(s)) and (s[i] in ['0'..'9', '.', '-']) do Inc(i);
+                s1 := Copy(s, j, i-j);
+                m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+                m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+                m1[3][1]:= (-StrToFloat(s1)/1000*Tfs)*Th;
+                m1[3][2]:= 0; m1[3][3]:= 1;
+                Tm := matrixmul(m1, Tm);
+                continue;
+              end;
+              m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
+              m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
+              m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
+              m2 := matrixmul(m1, Tm);
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_height(%d)',
+               [-Trunc(m2[2][2]*Rate)]));
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+               [Integer(bsClear)]));
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+               [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s1]));
+
+              m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+              m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+              m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s1)+Tc+Tw)*Th;
+              m1[3][2]:= 0; m1[3][3]:= 1;
+              Tm := matrixmul(m1, Tm);
             end;
-            m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
-            m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
-            m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
-            m2 := matrixmul(m1, Tm);
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_height(%d)',
-             [-Trunc(m2[2][2]*Rate)]));
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-             [Integer(bsClear)]));
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s]));
             ss.Clear;
           end else
             ss.Add(cm);
@@ -670,15 +714,11 @@ var
     end;
   end;
 
-const
-  ZBUF_LEN = 10000;
 var
   sl: TStringList; // for debug
-  i, p1, len, curpage: integer;
-  src, s, s1, obj, cmd: string;
+  i, p1, curpage: integer;
+  src, s, s1, obj: string;
   sp, sp1, sp2: PChar;
-  z: TZStream;
-  flate: boolean;
   pdfobj: TPDFObj;
 begin
   sl:= TStringList.Create;
@@ -799,80 +839,11 @@ begin
     end; // while
 
     if obj <> '' then begin
-      sp := PChar(src);
-      sp1 := PChar(-1);
-      while sp1 = PChar(-1) do begin
-        sp1 := mempos(sp, PChar(obj + ' 0 obj'), Length(src)-Integer(sp-PChar(src)));
-        if (sp1 <> nil) and ((sp1-1)^ in ['0'..'9']) then begin
-          sp := sp1 + Length(obj) + 6;
-          sp1 := mempos(sp, 'endobj', Length(src)-Integer(sp-PChar(src)));
-          if sp1 <> nil then sp := sp1 + 6;
-          sp1 := PChar(-1);
-        end;
-      end;
-      if (sp1 <> nil) and (sp1 <> PChar(-1)) then begin
-        sp := sp1 + Length(obj) + 6;
-        flate := Pos('/FlateDecode', sp) > 0;
-        len := 0;
-        sp1:= strpos(sp, '/Length');
-        if sp1 <> nil then begin
-          Inc(sp1, 8);
-          len:= Trunc(TokenFloat(sp1));
-          TokenFloat(sp1);
-          if sp1^ = 'R' then begin
-            obj := IntToStr(len);
-            len := 0;
-            sp1 := PChar(src);
-            sp2 := PChar(-1);
-            while sp2 = PChar(-1) do begin
-              sp2 := mempos(sp1, PChar(obj + ' 0 obj'), Length(src)-Integer(sp1-PChar(src)));
-              if (sp2 <> nil) and ((sp2-1)^ in ['0'..'9']) then begin
-                sp1 := sp2 + Length(obj) + 6;
-                sp2 := mempos(sp1, 'endobj', Length(src)-Integer(sp1-PChar(src)));
-                if sp2 <> nil then sp1 := sp2 + 6;
-                sp2 := PChar(-1);
-              end;
-            end;
-            if sp2 <> nil then begin
-              sp1 := sp2 + Length(obj) + 6;
-              sp2 := mempos(sp1, 'endobj', Length(src)-Integer(sp1-PChar(src)));
-              len := StrToInt(Trim(Copy(sp1, 1, sp2-sp1)));
-            end;
-          end;
-        end;
-        if len > 0 then begin
-          sp := strpos(sp, 'stream');
-          if sp <> nil then begin
-            Inc(sp, 6);
-            while (Integer(sp-PChar(src)) < Length(src))
-             and (sp^ in [#$0d, #$0a]) do Inc(sp);
-          end;
-          if flate then begin
-            z.next_in := PByte(sp);
-            z.avail_in := len;
-            if inflateInit(z) = Z_OK then begin
-              try
-                cmd := '';
-                SetLength(s1, ZBUF_LEN);
-                while True do begin
-                  z.next_out := PByte(PChar(s1));
-                  z.avail_out := ZBUF_LEN;
-                  if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
-                  if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
-                  cmd := cmd + PChar(s1);
-                end;
-                if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
-                cmd := cmd + PChar(s1);
-              finally
-                inflateEnd(z);
-              end;
-            end;
-          end else begin
-            cmd := Copy(sp, 1, len);
-          end;
-          //sl.Text:=cmd; sl.SaveToFile('3.txt');
-          DrawPage(cmd);
-        end;
+      pdfobj := FindObj(StrToInt(obj), PChar(src), Length(src));
+      if pdfobj <> nil then begin
+        //sl.Text:=cmd; sl.SaveToFile('3.txt');
+        DrawPage(pdfobj.stream);
+        pdfobj.Free;
       end;
     end;
   finally
