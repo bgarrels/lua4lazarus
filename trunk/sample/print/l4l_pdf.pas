@@ -548,7 +548,7 @@ var
 
             m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
             m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(Tfs*Th);
             m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s)+Tc+Tw)*Th;
             m1[3][2]:= 0; m1[3][3]:= 1;
             Tm := matrixmul(m1, Tm);
@@ -594,7 +594,7 @@ var
 
               m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
               m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(Tfs*Th);
               m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s1)+Tc+Tw)*Th;
               m1[3][2]:= 0; m1[3][3]:= 1;
               Tm := matrixmul(m1, Tm);
