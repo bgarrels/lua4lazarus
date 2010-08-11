@@ -649,27 +649,30 @@ end;
 function TLuaPrintObject.l4l_DrawPDF: integer;
 var
   fn: string;
-  ms: TMemoryStream;
+  fs: TFileStream;
 begin
   fn := lua_tostring(LS, -1);
-  ms := TMemoryStream.Create;
-  ms.LoadFromFile(fn);
-  LuaPrint.PushCanvas;
-  LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
-  case lua_gettop(LS) of
-    5: begin
-      DrawPDF(ms, Self, 1,
-       LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
-       LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
+  fs := TFileStream.Create(fn, fmOpenRead);
+  try
+    LuaPrint.PushCanvas;
+    LuaPrint.AddOrder(PRUN_NAME + '.PushCanvas()');
+    case lua_gettop(LS) of
+      5: begin
+        DrawPDF(fs, Self, 1,
+         LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+         LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
+      end;
+      6: begin
+        DrawPDF(fs, Self, lua_tointeger(LS, 5),
+         LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
+         LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
+      end;
     end;
-    6: begin
-      DrawPDF(ms, Self, lua_tointeger(LS, 5),
-       LP2DP(lua_tointeger(LS, 1)), LP2DP(lua_tointeger(LS, 2)),
-       LP2DP(lua_tointeger(LS, 3)), LP2DP(lua_tointeger(LS, 4)));
-    end;
+    LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
+    LuaPrint.PopCanvas;
+  finally
+    fs.Free;
   end;
-  LuaPrint.AddOrder(PRUN_NAME + '.PopCanvas()');
-  LuaPrint.PopCanvas;
   Result := 0;
 end;
 

@@ -40,11 +40,32 @@ type
 
   TMatrix = array[1..3, 1..3] of double;
 
+  { TPDFObj }
+
   TPDFObj = class
   public
     no: integer;
-    arr: string;
+    val: string;
+    decoded: boolean;
     stream: string;
+  end;
+
+  { TPDFReader }
+
+  TPDFReader = class
+  public
+    stream: TStream;
+    objs: TStringList;
+    buf: string;
+    buf_p: PChar;
+    buf_l: integer;
+    constructor Create(Astream: TStream);
+    destructor Destroy; override;
+    function FindObj(const no: string): TPDFObj;
+    function FindPageObj(no: integer): TPDFObj;
+    procedure DecodeObj(obj: TPDFObj);
+    procedure ReadBuf;
+    function GetVal(const name, arr: string): string;
   end;
 
   { TFontObj }
@@ -58,6 +79,338 @@ type
     procedure make_l(const s: string);
     function cid2utf8(const cid: string): string;
   end;
+
+function mempos(str1, str2: PChar; l: integer) : PChar;
+var
+  i, j, l2: integer;
+begin
+  l2 := strlen(str2);
+  for i := 0 to l-1 do begin
+    j := 0;
+    while ((j < l2) and (i+j < l) and ((str1+i+j)^ = (str2+j)^)) do Inc(j);
+    if j = l2 then begin
+      Result := str1 + i;
+      Exit;
+    end;
+  end;
+  Result := nil;
+end;
+
+function TokenStr(var p: PChar): string;
+begin
+  Result := '';
+  while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
+  if p^ = #0 then Exit;
+  while (p^ <> #0) and (p^ in ['0'..'9','.','-']) do begin
+    Result:= Result + p^;
+    Inc(p);
+  end;
+  while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
+end;
+
+{ TPDF }
+
+constructor TPDFReader.Create(Astream: TStream);
+begin
+  objs := TStringList.Create;
+  objs.Sorted:= True;
+  stream := Astream;
+  stream.Position:= 0;
+  buf_l := 0;
+end;
+
+destructor TPDFReader.Destroy;
+var
+  i : integer;
+begin
+  for i := 0 to objs.Count-1 do objs.Objects[i].Free;
+  objs.Free;
+  inherited Destroy;
+end;
+
+function TPDFReader.FindObj(const no: string): TPDFObj;
+var
+  i, j, c: integer;
+  sp1, sp2: PChar;
+  s1: string;
+  o, o1: TPDFObj;
+  ofs: array of integer;
+begin
+  Result := nil;
+  i := objs.IndexOf(no);
+  if i >= 0 then begin
+    Result := TPDFObj(objs.Objects[i]);
+    if Result.decoded then Exit;
+  end else begin
+    while True do begin
+      if (buf_l = 0) or (buf_p >= PChar(buf)+buf_l) then ReadBuf;
+      sp1 := mempos(buf_p, 'obj', buf_l-Integer(buf_p-PChar(buf)));
+      if sp1 <> nil then begin
+        sp2 := mempos(buf_p, 'endobj', buf_l-Integer(buf_p-PChar(buf)));
+        if sp2 <> nil then begin
+          o := TPDFObj.Create;
+          o.decoded:= False;
+          SetLength(o.val, sp2-sp1-3);
+          move((sp1+3)^, o.val[1], sp2-sp1-3);
+          o.val := Trim(o.val);
+          s1 := '';
+          Dec(sp1, 4);
+          while sp1^ in ['0'..'9'] do begin
+            s1 := sp1^ + s1;
+            Dec(sp1);
+          end;
+          o.no:= StrToInt(s1);
+          Objs.AddObject(s1, o);
+          buf_p := sp2 + 6;
+          if s1 = no then begin
+            Result := o;
+            Break;
+          end;
+        end else
+          Exit; // broken pdf
+      end else begin
+        for i:= 0 to objs.Count-1 do begin
+          o := TPDFObj(objs.Objects[i]);
+          if Pos('/Type/ObjStm', o.val) > 0 then begin
+            sp1 := strpos(PChar(o.val), '/N');
+            if sp1 = nil then Exit; // broken pdf
+            Inc(sp1, 3);
+            c := StrToInt(TokenStr(sp1));
+            DecodeObj(o);
+            sp1 := PChar(o.stream);
+            SetLength(ofs, c);
+            for j:= 1 to c do begin
+              TokenStr(sp1);
+              ofs[j-1] := StrToInt(TokenStr(sp1));
+            end;
+            sp2 := PChar(o.stream);
+            for j:= 1 to c do begin
+              o1 := TPDFObj.Create;
+              s1 := TokenStr(sp2);
+              TokenStr(sp2);
+              if s1 = no then Result := o1;
+              Objs.AddObject(s1, o1);
+              o1.no:= StrToInt(s1);
+              if j < c then begin
+                SetLength(o1.val, ofs[j]-ofs[j-1]);
+                move((sp1+ofs[j-1])^, o1.val[1], ofs[j]-ofs[j-1]);
+              end else begin
+                SetLength(o1.val, Length(o.stream)-(sp1-PChar(o.stream)));
+                move((sp1+ofs[j-1])^, o1.val[1], Length(o.stream)-(sp1-PChar(o.stream)));
+              end;
+            end;
+            o.val := '';
+            if Result <> nil then Break;
+          end;
+        end;
+        Break;
+      end;
+    end; // while
+  end;
+
+  if (Result <> nil) and (Result.decoded = False) then begin
+    DecodeObj(Result);
+  end;
+end;
+
+function TPDFReader.FindPageObj(no: integer): TPDFObj;
+var
+  i: integer;
+  sp1, sp2: PChar;
+  s1: string;
+  o: TPDFObj;
+begin
+  Result := nil;
+  for i := 0 to objs.Count-1 do begin
+    o := TPDFObj(objs.Objects[i]);
+    if (Pos('/Type/Page', o.val) > 0) and (Pos('/Contents', o.val) > 0) then begin
+      Dec(no);
+      if no = 0 then begin
+        Result := o;
+        Break;
+      end;
+    end;
+  end;
+
+  if Result = nil then begin
+    while True do begin
+      if (buf_l = 0) or (buf_p >= PChar(buf)+buf_l) then ReadBuf;
+      sp1 := mempos(buf_p, 'obj', buf_l-Integer(buf_p-PChar(buf)));
+      if sp1 <> nil then begin
+        sp2 := mempos(buf_p, 'endobj', buf_l-Integer(buf_p-PChar(buf)));
+        if sp2 <> nil then begin
+          o := TPDFObj.Create;
+          o.decoded:= False;
+          SetLength(o.val, sp2-sp1-3);
+          move((sp1+3)^, o.val[1], sp2-sp1-3);
+          o.val := Trim(o.val);
+          s1 := '';
+          Dec(sp1, 4);
+          while sp1^ in ['0'..'9'] do begin
+            s1 := sp1^ + s1;
+            Dec(sp1);
+          end;
+          o.no:= StrToInt(s1);
+          Objs.AddObject(s1, o);
+          buf_p := sp2 + 6;
+          if (Pos('/Type/Page', o.val) > 0) and (Pos('/Contents', o.val) > 0) then begin
+            Dec(no);
+            if no = 0 then begin
+              Result := o;
+              Break;
+            end;
+          end;
+        end else
+          Exit; // broken pdf
+      end else
+        Exit; // finished
+    end; // while
+  end;
+
+  if (Result <> nil) and (Result.decoded = False) then begin
+    DecodeObj(Result);
+  end;
+end;
+
+procedure TPDFReader.DecodeObj(obj: TPDFObj);
+const
+  ZBUF_LEN = 10000;
+var
+  sp, sp1, sp2: PChar;
+  s1, s2: string;
+  len: integer;
+  o: TPDFObj;
+  z: TZStream;
+begin
+  obj.decoded:= True;
+  sp := PChar(obj.val);
+  sp1 := strpos(sp, 'stream');
+  if sp1 = nil then Exit;
+  s1:= Trim(Copy(sp, 1, sp1-sp));
+  len := 0;
+  sp2:= strpos(PChar(s1), '/Length');
+  if sp2 <> nil then begin
+    Inc(sp2, 8);
+    len:= StrToInt(TokenStr(sp2));
+    TokenStr(sp2);
+    if sp2^ = 'R' then begin
+      o := FindObj(IntToStr(len));
+      len := 0;
+      if o <> nil then len := StrToInt(o.val);
+    end;
+  end;
+  if len > 0 then begin
+    Inc(sp1, 6);
+    while (sp1^ <> #0) and (sp1^ in [#$0d, #$0a]) do Inc(sp1);
+    if Pos('/FlateDecode', s1) > 0 then begin
+      z.next_in := PByte(sp1);
+      z.avail_in := len;
+      if inflateInit(z) = Z_OK then begin
+        try
+          obj.stream := '';
+          SetLength(s2, ZBUF_LEN);
+          while True do begin
+            z.next_out := PByte(PChar(s2));
+            z.avail_out := ZBUF_LEN;
+            if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
+            if z.avail_out > 0 then s2[ZBUF_LEN-z.avail_out+1]:= #0;
+            obj.stream := obj.stream + PChar(s2);
+          end;
+          if z.avail_out > 0 then s2[ZBUF_LEN-z.avail_out+1]:= #0;
+          obj.stream := obj.stream + PChar(s2);
+        finally
+          inflateEnd(z);
+        end;
+      end;
+    end else begin
+      obj.stream := Copy(sp1, 1, len);
+    end;
+    obj.val:= s1;
+  end;
+end;
+
+procedure TPDFReader.ReadBuf;
+const
+  BUF_LEN = 10000;
+var
+  i, l: integer;
+  sp1, sp2: PChar;
+begin
+  l := BUF_LEN;
+  while True do begin
+    SetLength(buf, l);
+    buf_l := stream.Read(buf[1], l);
+    buf_p := PChar(buf);
+    if buf_l = l then begin
+      sp1 := mempos(buf_p, 'obj', buf_l-Integer(buf_p-PChar(buf)));
+      sp2 := mempos(buf_p, 'endobj', buf_l-Integer(buf_p-PChar(buf)));
+      if (sp1 = nil) or (sp2 = nil) or (sp1 > sp2) then begin
+        stream.Position:= stream.Position - l;
+        Inc(l, BUF_LEN);
+        continue;
+      end;
+      sp1 := PChar(buf) + l;
+      i := stream.Position;
+      while Copy(sp1-6, 1, 6) <> 'endobj' do begin
+        Dec(sp1);
+        Dec(buf_l);
+        Dec(i);
+      end;
+      stream.Position:= i;
+    end;
+    Break;
+  end; // while
+end;
+
+function TPDFReader.GetVal(const name, arr: string): string;
+
+  function GetValSub(sp: PChar): string;
+  var
+    c: integer;
+    s: string;
+    o: TPDFObj;
+    sp1: PChar;
+  begin
+    Result := '';
+    if (sp^ = '<') and ((sp+1)^ = '<') then begin
+      c:= 0;
+      sp1 := sp + 2;
+      while sp1^ <> #0 do begin
+        if (sp1^ = '<') and ((sp1+1)^ = '<') then begin
+          Inc(sp1);
+          Inc(c);
+        end;
+        if (sp1^ = '>') and ((sp1+1)^ = '>') then begin
+          if c = 0 then begin
+            Result := Copy(sp, 1, sp1-sp+2);
+            Exit;
+          end else
+            Dec(c);
+        end;
+        Inc(sp1);
+      end;
+    end else begin
+      s := TokenStr(sp);
+      TokenStr(sp);
+      if sp^ = 'R' then begin
+        o := FindObj(s);
+        if o <> nil then Result := GetValSub(PChar(o.val));
+      end else
+        Result := s;
+    end;
+  end;
+
+var
+  sp: PChar;
+begin
+  Result := '';
+  sp := strpos(PChar(arr), PChar(name));
+  if sp = nil then Exit;
+  Inc(sp, Length(name));
+  while sp^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(sp);
+  if sp^ = #0 then Exit;
+  Result := GetValSub(sp);
+end;
 
 { TFontObj }
 
@@ -122,22 +475,6 @@ procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
 var
   PageW, PageH, RateW, RateH, Rate: double;
   fonts: TStringList;
-
-  function TokenFloat(var p: PChar): double;
-  var
-    s: string;
-  begin
-    Result := 0;
-    while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
-    if p^ = #0 then Exit;
-    s:= '';
-    while (p^ <> #0) and (p^ in ['0'..'9','.','-']) do begin
-      s:= s + p^;
-      Inc(p);
-    end;
-    if s <> '' then Result := StrToFloat(s);
-    while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
-  end;
 
   function matrixmul(m1, m2: TMatrix): TMatrix;
   var
@@ -224,9 +561,7 @@ var
             Tlm[1][1] := 1; Tlm[1][2]:=0;Tlm[1][3]:=0;
             Tlm[2][1] := 0; Tlm[2][2]:=1;Tlm[2][3]:=0;
             Tlm[3][1] := 0; Tlm[3][2]:=0;Tlm[3][3]:=1;
-            Tm[1][1] := 1; Tm[1][2]:=0;Tm[1][3]:=0;
-            Tm[2][1] := 0; Tm[2][2]:=1;Tm[2][3]:=0;
-            Tm[3][1] := 0; Tm[3][2]:=0;Tm[3][3]:=1;
+            Tm := Tlm;
             ss.Clear;
           end else if cm = 'ET' then begin
             bt := False;
@@ -611,244 +946,87 @@ var
     end;
   end;
 
-  function mempos(str1, str2: PChar; l: integer) : PChar;
-  var
-    i, j, l2: integer;
-  begin
-    l2 := strlen(str2);
-    for i := 0 to l-1 do begin
-      j := 0;
-      while ((j < l2) and (i+j < l) and ((str1+i+j)^ = (str2+j)^)) do Inc(j);
-      if j = l2 then begin
-        Result := str1 + i;
-        Exit;
-      end;
-    end;
-    Result := nil;
-  end;
-
-  function FindObj(const n: integer; src: PChar; srclen: integer): TPDFObj;
-  const
-    ZBUF_LEN = 10000;
-  var
-    sp, sp1, sp2: PChar;
-    s, s1: string;
-    flate: boolean;
-    len: integer;
-    o: TPDFObj;
-    z: TZStream;
-  begin
-    Result := nil;
-    sp := src;
-    sp1 := PChar(-1);
-    s := IntToStr(n);
-    while sp1 = PChar(-1) do begin
-      sp1 := mempos(sp, PChar(s + ' 0 obj'), srclen-Integer(sp-src));
-      if (sp1 <> nil) and ((sp1-1)^ in ['0'..'9']) then begin
-        sp := sp1 + Length(s) + 6;
-        sp1 := mempos(sp, 'endobj', srclen-Integer(sp-src));
-        if sp1 <> nil then sp := sp1 + 6;
-        sp1 := PChar(-1);
-      end;
-    end;
-    if sp1 <> nil then begin
-      sp := sp1 + Length(s) + 6;
-      sp1 := mempos(sp, 'endobj', srclen-Integer(sp-src));
-      if sp1 <> nil then begin
-        Result := TPDFObj.Create;
-        Result.no:= n;
-        sp2 := strpos(sp, 'stream');
-        if (sp2 = nil) or (sp2 > sp1) then begin
-          sp2 := nil;
-          Result.arr:= Trim(Copy(sp, 1, sp1-sp));
-        end else
-          Result.arr:= Trim(Copy(sp, 1, sp2-sp));
-
-        if sp2 <> nil then begin
-          flate := Pos('/FlateDecode', sp) > 0;
-          len := 0;
-          sp1:= strpos(sp, '/Length');
-          if sp1 <> nil then begin
-            Inc(sp1, 8);
-            len:= Trunc(TokenFloat(sp1));
-            TokenFloat(sp1);
-            if sp1^ = 'R' then begin
-              o := FindObj(len, src, srclen);
-              len := 0;
-              if o <> nil then begin
-                len := StrToInt(o.arr);
-                o.Free;
-              end;
-            end;
-          end;
-          if len > 0 then begin
-            Inc(sp2, 6);
-            while (Integer(sp2-src) < srclen)
-             and (sp2^ in [#$0d, #$0a]) do Inc(sp2);
-            if flate then begin
-              z.next_in := PByte(sp2);
-              z.avail_in := len;
-              if inflateInit(z) = Z_OK then begin
-                try
-                  Result.stream := '';
-                  SetLength(s1, ZBUF_LEN);
-                  while True do begin
-                    z.next_out := PByte(PChar(s1));
-                    z.avail_out := ZBUF_LEN;
-                    if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
-                    if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
-                    Result.stream := Result.stream + PChar(s1);
-                  end;
-                  if z.avail_out > 0 then s1[ZBUF_LEN-z.avail_out+1]:= #0;
-                  Result.stream := Result.stream + PChar(s1);
-                finally
-                  inflateEnd(z);
-                end;
-              end;
-            end else begin
-              Result.stream := Copy(sp2, 1, len);
-            end;
-          end;
-        end;
-      end;
-    end;
-  end;
-
 var
+  pdfr: TPDFReader;
+  pageobj, pdfobj: TPDFObj;
+  i: integer;
+  s: string;
+  sp1: PChar;
   sl: TStringList; // for debug
-  i, p1, curpage: integer;
-  src, s, s1, obj: string;
-  sp, sp1, sp2: PChar;
-  pdfobj: TPDFObj;
 begin
   sl:= TStringList.Create;
+  pdfr := TPDFReader.Create(stream);
   fonts:= TStringList.Create;
   try
-    SetLength(src, stream.Size);
-    stream.Position:= 0;
-    stream.ReadBuffer(src[1], stream.Size);
-    sp := PChar(src);
-    curpage := 1;
-    while True do begin
-      sp1 := mempos(sp, 'obj', Length(src)-Integer(sp-PChar(src)));
-      if sp1 <> nil then begin
-        sp2 := mempos(sp, 'endobj', Length(src)-Integer(sp-PChar(src)));
-        if sp2 <> nil then begin
-          SetLength(s, sp2-sp1-3);
-          move((sp1+3)^, s[1], sp2-sp1-3);
-          s := Trim(s);
-          sp := sp2 + 6;
-        end else begin
-          s := Trim(Copy(sp1+3, 1, Length(src)));
-          sp := PChar(src) + Length(src);
-        end;
+    pageobj := pdfr.FindPageObj(page);
+    if pageobj = nil then Exit;
+
+    PageW := 0;
+    PageH := 0;
+    sp1 := strpos(PChar(pageobj.val), '/MediaBox[');
+    if sp1 <> nil then begin
+      Inc(sp1, 10);
+      TokenStr(sp1);
+      TokenStr(sp1);
+      PageW := StrToFloat(TokenStr(sp1));
+      PageH := StrToFloat(TokenStr(sp1));
+
+      if PageW <> 0 then begin
+        RateW := (x2 - x1) / PageW;
       end else
-        Break;
+        RateW := 1;
 
-      p1 := Pos('/Type/Page', s);
-      if p1 > 0 then begin
-        p1 := Pos('/Contents', s);
-        if p1 > 0 then begin
-          i := p1+10;
-          obj := '';
-          while i <=  Length(s) do begin
-            if s[i] in ['0'..'9'] then begin
-              obj := obj + s[i];
-            end else
-              Break;
-            Inc(i);
-          end;
-          if curpage = page then begin
-            PageW := 0;
-            PageH := 0;
-            sp1 := strpos(PChar(s), '/MediaBox[');
-            if sp1 <> nil then begin
-              Inc(sp1, 10);
-              TokenFloat(sp1);
-              TokenFloat(sp1);
-              PageW := TokenFloat(sp1);
-              PageH := TokenFloat(sp1);
+      if PageH <> 0 then begin
+        RateH := (y2 - y1) / PageH;
+      end else
+        RateH := 1;
 
-              if PageW <> 0 then begin
-                RateW := (x2 - x1) / PageW;
-              end else
-                RateW := 1;
+      Rate := RateW;
+      if RateW > RateH then Rate := RateH;
+    end;
 
-              if PageH <> 0 then begin
-                RateH := (y2 - y1) / PageH;
-              end else
-                RateH := 1;
-
-              Rate := RateW;
-              if RateW > RateH then Rate := RateH;
-            end;
-
-            sp1 := strpos(PChar(s), '/Resources');
-            if sp1 <> nil then begin
-              Inc(sp1, 11);
-              pdfobj := FindObj(Trunc(TokenFloat(sp1)), PChar(src), Length(src));
-              if pdfobj <> nil then begin
-                s1 := pdfobj.arr; pdfobj.Free;
-                sp1 := strpos(PChar(s1), '/Font');
-                if sp1 <> nil then begin
-                  Inc(sp1, 6);
-                  pdfobj := FindObj(Trunc(TokenFloat(sp1)), PChar(src), Length(src));
-                  if pdfobj <> nil then begin
-                    s1 := pdfobj.arr; pdfobj.Free;
-                    sp1 := PChar(s1);
-                    while sp1^ <> #0 do begin
-                      if sp1^ = '/' then begin
-                        fonts.Add('');
-                        while not(sp1^ in [#0, ' ']) do begin
-                          fonts[fonts.Count-1] := fonts[fonts.Count-1] + sp1^;
-                          Inc(sp1);
-                        end;
-                        i := Trunc(TokenFloat(sp1));
-                        fonts.Objects[fonts.Count-1]:= TObject(i);
-                      end;
-                      Inc(sp1);
-                    end;
-
-                    for i := 0 to fonts.Count-1 do begin
-                      pdfobj := FindObj(Integer(fonts.Objects[i]), PChar(src), Length(src));
-                      fonts.Objects[i] := nil;
-                      if pdfobj <> nil then begin
-                        s1 := pdfobj.arr; pdfobj.Free;
-                        sp1 := strpos(PChar(s1), '/ToUnicode');
-                        if sp1 <> nil then begin
-                          Inc(sp1, 11);
-                          pdfobj := FindObj(Trunc(TokenFloat(sp1)), PChar(src), Length(src));
-                          if pdfobj <> nil then begin
-                            fonts.Objects[i] := TFontObj.Create;
-                            TFontObj(fonts.Objects[i]).make_l(pdfobj.stream);
-                            pdfobj.Free;
-                          end;
-                        end;
-                      end;
-                    end;
-                  end;
-                end;
-              end;
-            end;
-
-            break;
-          end;
-          Inc(curpage);
+    s := pdfr.GetVal('/Resources', pageobj.val);
+    s := pdfr.GetVal('/Font', s);
+    sp1 := PChar(s);
+    while sp1^ <> #0 do begin
+      if sp1^ = '/' then begin
+        fonts.Add('');
+        while not(sp1^ in [#0, ' ']) do begin
+          fonts[fonts.Count-1] := fonts[fonts.Count-1] + sp1^;
+          Inc(sp1);
         end;
+        i := StrToInt(TokenStr(sp1));
+        fonts.Objects[fonts.Count-1]:= TObject(i);
       end;
-    end; // while
+      Inc(sp1);
+    end;
 
-    if obj <> '' then begin
-      pdfobj := FindObj(StrToInt(obj), PChar(src), Length(src));
+    for i := 0 to fonts.Count-1 do begin
+      pdfobj := pdfr.FindObj(IntToStr(Integer(fonts.Objects[i])));
+      fonts.Objects[i] := nil;
       if pdfobj <> nil then begin
-        //sl.Text:=cmd; sl.SaveToFile('3.txt');
-        DrawPage(pdfobj.stream);
-        pdfobj.Free;
+        sp1 := strpos(PChar(pdfobj.val), '/ToUnicode');
+        if sp1 <> nil then begin
+          Inc(sp1, 11);
+          pdfobj := pdfr.FindObj(TokenStr(sp1));
+          if pdfobj <> nil then begin
+            fonts.Objects[i] := TFontObj.Create;
+            TFontObj(fonts.Objects[i]).make_l(pdfobj.stream);
+          end;
+        end;
       end;
     end;
+
+    sp1 := strpos(PChar(pageobj.val), '/Contents');
+    if sp1 = nil then Exit;
+    Inc(sp1, 10);
+    pageobj := pdfr.FindObj(TokenStr(sp1));
+    //sl.Text:=cmd; sl.SaveToFile('3.txt');
+    DrawPage(pageobj.stream);
   finally
     for i := 0 to fonts.Count-1 do fonts.Objects[i].Free;
     fonts.Free;
+    pdfr.Free;
     sl.Free;
   end;
 end;
