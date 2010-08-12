@@ -12,7 +12,7 @@ unit l4l_print;
 
 {$mode objfpc}{$H+}
 
-{$DEFINE USE_AGG}
+{.$DEFINE USE_AGG}
 
 interface
 
