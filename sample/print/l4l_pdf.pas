@@ -21,7 +21,7 @@ procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
 
 implementation
 uses
-  graphics, contnrs, paszlib;
+  LCLProc, graphics, contnrs, paszlib;
 
 const
   PRUN_NAME = 'P_';
@@ -339,7 +339,7 @@ begin
             z.avail_out := ZBUF_LEN;
             r := inflate(z, Z_SYNC_FLUSH);
             l := Length(obj.stream);
-            SetLength(obj.stream, l+ZBUF_LEN-z.avail_out);
+            SetLength(obj.stream, l+(ZBUF_LEN-z.avail_out));
             move(s2[1], obj.stream[l+1], ZBUF_LEN-z.avail_out);
           end;
         finally
@@ -549,11 +549,11 @@ var
   var
     ss: TStringList;
     params: TObjectList;
-    i, j, Tf_index: integer;
-    s, s1, cm, Tf: string;
+    i, j, l, Tf_index: integer;
+    s, s1, s2, cm, Tf: string;
     sx, sy, x1, y1, x2, y2: double;
     Tl, Tc, Tw, Tfs, Th, Trise: double;
-    sp: PChar;
+    sp, sp1: PChar;
     xy: TDblXY;
     bt: boolean;
     Tlm, Tm, m1, m2: TMatrix;
@@ -885,6 +885,7 @@ var
               if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil) then
                 s := TFontObj(fonts.Objects[Tf_index]).cid2utf8(s);
             end;
+
             m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
             m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
             m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
@@ -893,44 +894,46 @@ var
              [-Trunc(m2[2][2]*Rate)]));
             LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
              [Integer(bsClear)]));
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-             [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s]));
+            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
 
-            m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
-            m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(Tfs*Th);
-            m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s)+Tc+Tw)*Th;
-            m1[3][2]:= 0; m1[3][3]:= 1;
-            Tm := matrixmul(m1, Tm);
+            l := UTF8Length(s);
+            for j := 1 to l do begin
+              s2 := UTF8Copy(s, j, 1);
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+               [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s2]));
+              m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+              m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+              m1[3][1]:= (Tc+Tw)*Th;
+              m1[3][2]:= 0; m1[3][3]:= 1;
+              Tm := matrixmul(m1, Tm);
+              Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
+
+              m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
+              m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
+              m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
+              m2 := matrixmul(m1, Tm);
+            end;
             ss.Clear;
           end else if cm = 'TJ' then begin
             s := ss[ss.Count-1];
-            Delete(s, 1, 1); Delete(s, Length(s), 1);
-            i := 1;
-            while i <= Length(s) do begin
-              j := i;
-              if s[j] = '(' then begin
-                Inc(i);
-                while (i <= Length(s)) and (s[i] <> ')') do Inc(i);
-                s1 := Copy(s, j+1, i-j-1);
-                Inc(i);
-              end else if s[j] = '<' then begin
-                Inc(i);
-                while (i <= Length(s)) and (s[i] <> '>') do Inc(i);
-                s1 := Copy(s, j+1, i-j-1);
-                Inc(i);
+            sp1 := PChar(s) + 1;
+            while sp1^ <> ']' do begin
+              s1 := TokenStr(sp1);
+              if s1[1] = '<' then begin
+                Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
                 if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil) then
                   s1 := TFontObj(fonts.Objects[Tf_index]).cid2utf8(s1);
+              end else if s1[1] = '(' then begin
+                Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
               end else begin
-                while (i <= Length(s)) and (s[i] in ['0'..'9', '.', '-']) do Inc(i);
-                s1 := Copy(s, j, i-j);
                 m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
                 m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-                m1[3][1]:= (-StrToFloat(s1)/1000*Tfs)*Th;
+                m1[3][1]:= -StrToFloat(s1) * Tfs * Th / 1000;
                 m1[3][2]:= 0; m1[3][3]:= 1;
                 Tm := matrixmul(m1, Tm);
                 continue;
               end;
+
               m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
               m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
               m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
@@ -939,15 +942,24 @@ var
                [-Trunc(m2[2][2]*Rate)]));
               LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                [Integer(bsClear)]));
-              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-               [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s1]));
+              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+              l := UTF8Length(s1);
+              for j := 1 to l do begin
+                s2 := UTF8Copy(s1, j, 1);
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+                 [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s2]));
+                m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+                m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+                m1[3][1]:= (Tc+Tw)*Th;
+                m1[3][2]:= 0; m1[3][3]:= 1;
+                Tm := matrixmul(m1, Tm);
+                Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
 
-              m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
-              m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(Tfs*Th);
-              m1[3][1]:= (LPO.LuaPrint.Canvas.TextWidth(s1)+Tc+Tw)*Th;
-              m1[3][2]:= 0; m1[3][3]:= 1;
-              Tm := matrixmul(m1, Tm);
+                m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
+                m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
+                m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
+                m2 := matrixmul(m1, Tm);
+              end;
             end;
             ss.Clear;
           end else
@@ -1021,6 +1033,7 @@ begin
       fonts.Objects[i] := nil;
       if pdfobj <> nil then begin
         s := pdfr.GetVal('/ToUnicode', pdfobj.val);
+        // ToDo Get width. from /Widths[]
         if s <> ''then begin
           fonts.Objects[i] := TFontObj.Create;
           TFontObj(fonts.Objects[i]).make_l(s);
