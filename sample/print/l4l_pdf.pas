@@ -7,9 +7,6 @@ unit l4l_pdf;
     License: New BSD
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
-
-  ToDo:
-    /Type/ObjStm .
 }
 
 {$mode objfpc}{$H+}
@@ -97,14 +94,50 @@ begin
 end;
 
 function TokenStr(var p: PChar): string;
+var
+  c: char;
+  i: integer;
 begin
   Result := '';
   while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
   if p^ = #0 then Exit;
-  while (p^ <> #0) and (p^ in ['0'..'9','.','-']) do begin
-    Result:= Result + p^;
+  if p^ in ['(', '<', '[', '{'] then begin
+    case p^ of
+      '(': c := ')';
+      '<': c := '>';
+      '[': c := ']';
+      '{': c := '}';
+    end;
+    i:= 0;
+    Result := p^;
     Inc(p);
+    while (p^ <> #0) and ((i > 0) or (p^ <> c)) do begin
+      if p^ = Result[1] then begin
+        Inc(i);
+      end else if p^ = c then begin
+        Dec(i);
+      end;
+      Result := Result + p^;
+      Inc(p);
+    end;
+    if p^ <> #0 then begin
+      Result := Result + p^;
+      Inc(p);
+    end;
+  end else begin
+    case p^ of
+      '/', '%': begin
+        Result := p^;
+        Inc(p);
+      end
+    end;
+    while not (p^ in [#0, #$09, #$0a, #$0c, #$0d, ' ',
+     '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']) do begin
+      Result := Result + p^;
+      Inc(p);
+    end;
   end;
+
   while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
 end;
 
@@ -132,7 +165,7 @@ function TPDFReader.FindObj(const no: string): TPDFObj;
 var
   i, j, c: integer;
   sp1, sp2: PChar;
-  s1: string;
+  s, s1: string;
   o, o1: TPDFObj;
   ofs: array of integer;
 begin
@@ -169,39 +202,42 @@ begin
         end else
           Exit; // broken pdf
       end else begin
-        for i:= 0 to objs.Count-1 do begin
+        i:= 0;
+        while  i < objs.Count do begin
           o := TPDFObj(objs.Objects[i]);
           if Pos('/Type/ObjStm', o.val) > 0 then begin
-            sp1 := strpos(PChar(o.val), '/N');
-            if sp1 = nil then Exit; // broken pdf
-            Inc(sp1, 3);
-            c := StrToInt(TokenStr(sp1));
+            c := StrToIntDef(GetVal('/N', o.val), 0);
+            if c = 0 then Exit; // broken pdf
             DecodeObj(o);
-            sp1 := PChar(o.stream);
+            SetLength(s, Length(o.stream));
+            move(o.stream[1], s[1], Length(o.stream));
+            o.Free;
+            objs.Delete(i);
+            sp1 := PChar(s);
             SetLength(ofs, c);
             for j:= 1 to c do begin
               TokenStr(sp1);
               ofs[j-1] := StrToInt(TokenStr(sp1));
             end;
-            sp2 := PChar(o.stream);
+            sp2 := PChar(s);
             for j:= 1 to c do begin
               o1 := TPDFObj.Create;
               s1 := TokenStr(sp2);
               TokenStr(sp2);
               if s1 = no then Result := o1;
-              Objs.AddObject(s1, o1);
+              objs.AddObject(s1, o1);
               o1.no:= StrToInt(s1);
               if j < c then begin
                 SetLength(o1.val, ofs[j]-ofs[j-1]);
                 move((sp1+ofs[j-1])^, o1.val[1], ofs[j]-ofs[j-1]);
               end else begin
-                SetLength(o1.val, Length(o.stream)-(sp1-PChar(o.stream)));
-                move((sp1+ofs[j-1])^, o1.val[1], Length(o.stream)-(sp1-PChar(o.stream)));
+                SetLength(o1.val, Length(s)-(sp1-PChar(s)));
+                move((sp1+ofs[j-1])^, o1.val[1], Length(s)-(sp1-PChar(s)));
               end;
             end;
-            o.val := '';
             if Result <> nil then Break;
-          end;
+          end else
+            Inc(i);
         end;
         Break;
       end;
@@ -276,10 +312,9 @@ procedure TPDFReader.DecodeObj(obj: TPDFObj);
 const
   ZBUF_LEN = 10000;
 var
-  sp, sp1, sp2: PChar;
+  sp, sp1: PChar;
   s1, s2: string;
-  len: integer;
-  o: TPDFObj;
+  r, len, l: integer;
   z: TZStream;
 begin
   obj.decoded:= True;
@@ -287,18 +322,7 @@ begin
   sp1 := strpos(sp, 'stream');
   if sp1 = nil then Exit;
   s1:= Trim(Copy(sp, 1, sp1-sp));
-  len := 0;
-  sp2:= strpos(PChar(s1), '/Length');
-  if sp2 <> nil then begin
-    Inc(sp2, 8);
-    len:= StrToInt(TokenStr(sp2));
-    TokenStr(sp2);
-    if sp2^ = 'R' then begin
-      o := FindObj(IntToStr(len));
-      len := 0;
-      if o <> nil then len := StrToInt(o.val);
-    end;
-  end;
+  len := StrToIntDef(GetVal('/Length', s1), 0);
   if len > 0 then begin
     Inc(sp1, 6);
     while (sp1^ <> #0) and (sp1^ in [#$0d, #$0a]) do Inc(sp1);
@@ -309,21 +333,22 @@ begin
         try
           obj.stream := '';
           SetLength(s2, ZBUF_LEN);
-          while True do begin
+          r := Z_OK;
+          while r = Z_OK do begin
             z.next_out := PByte(PChar(s2));
             z.avail_out := ZBUF_LEN;
-            if inflate(z, Z_SYNC_FLUSH) <> Z_OK then break;
-            if z.avail_out > 0 then s2[ZBUF_LEN-z.avail_out+1]:= #0;
-            obj.stream := obj.stream + PChar(s2);
+            r := inflate(z, Z_SYNC_FLUSH);
+            l := Length(obj.stream);
+            SetLength(obj.stream, l+ZBUF_LEN-z.avail_out);
+            move(s2[1], obj.stream[l+1], ZBUF_LEN-z.avail_out);
           end;
-          if z.avail_out > 0 then s2[ZBUF_LEN-z.avail_out+1]:= #0;
-          obj.stream := obj.stream + PChar(s2);
         finally
           inflateEnd(z);
         end;
       end;
     end else begin
-      obj.stream := Copy(sp1, 1, len);
+      SetLength(obj.stream, len);
+      move(sp1^, obj.stream[1], len);
     end;
     obj.val:= s1;
   end;
@@ -331,7 +356,7 @@ end;
 
 procedure TPDFReader.ReadBuf;
 const
-  BUF_LEN = 10000;
+  BUF_LEN = 100000;
 var
   i, l: integer;
   sp1, sp2: PChar;
@@ -394,7 +419,12 @@ function TPDFReader.GetVal(const name, arr: string): string;
       TokenStr(sp);
       if sp^ = 'R' then begin
         o := FindObj(s);
-        if o <> nil then Result := GetValSub(PChar(o.val));
+        if o <> nil then begin
+          if o.stream <> '' then begin
+            Result := o.stream;
+          end else
+            Result := GetValSub(PChar(o.val));
+        end;
       end else
         Result := s;
     end;
@@ -428,41 +458,66 @@ end;
 
 procedure TFontObj.make_l(const s: string);
 var
-  p, p1, p2, p3, e: PChar;
+  p, p1: PChar;
+  s1, s2, s3, s4: string;
+  i, c1, c2, c3: integer;
 begin
   p := strpos(PChar(s), 'beginbfchar');
-  e := strpos(PChar(s), 'endbfchar');
+  if p = nil then Exit;
   b := 0;
   l.Clear;
-  while (p <> nil) and (p < e) do begin
-    p := strpos(p, '<');
-    if p <> nil then begin
-      p1 := strpos(p+1, '>');
-      if p1 <> nil then begin
-        p2 := strpos(p1+1, '<');
-        if p2 <> nil then begin
-          p3 := strpos(p2+1, '>');
-          b := p1 - p - 1;
-          l.AddObject(
-           Copy(p+1, 1, b), TObject(StrToInt('$' + Copy(p2+1, 1, 4))));
-          p := p3 + 1;
-          continue;
-        end;
+  Inc(p, 11);
+  while True do begin
+    s1 := TokenStr(p);
+    if (s1 = '') or (s1 = 'endbfchar') then break;
+    b := Length(s1) - 2;
+    s2 := TokenStr(p);
+    l.AddObject(Copy(s1, 2, b),
+     TObject(StrToInt('$' + Copy(s2, 2, Length(s2)-2))));
+  end;
+
+  p := strpos(PChar(s), 'beginbfrange');
+  if p = nil then Exit;
+  Inc(p, 12);
+  while True do begin
+    s1 := TokenStr(p);
+    if (s1 = '') or (s1 = 'endbfrange') then break;
+    c1 := StrToInt('$'+Copy(s1, 2, Length(s1)-2));
+    s2 := TokenStr(p);
+    c2 := StrToInt('$'+Copy(s2, 2, Length(s2)-2));
+    s3 := TokenStr(p);
+    if (s3 <> '') and (s3[1] = '[') then begin
+      i := 0;
+      p1 := PChar(s3) + 1;
+      while (p1^ <> ']') and (c1 + i <= c2) do begin
+        s4 := TokenStr(p1);
+        l.AddObject(IntToHex(c1+i, b),
+         TObject(StrToInt('$' + Copy(s4, 2, Length(s4)-2))));
+        Inc(i);
       end;
-      p:= nil;
+    end else begin
+      c3 := StrToInt('$'+Copy(s3, 2, Length(s3)-2));
+      i := 0;
+      while c1 + i <= c2 do begin
+        l.AddObject(IntToHex(c1+i, b), TObject(c3+i));
+        Inc(i);
+      end;
     end;
   end;
 end;
 
 function TFontObj.cid2utf8(const cid: string): string;
 var
-  ws: string;
+  ws: WideString;
+  s: string;
   i, j: integer;
   w: word;
 begin
   ws := '';
-  for i := 1 to Length(cid) div Self.b do begin
-    j := l.IndexOf(cid[i*2-1]+cid[i*2]);
+  for i := 1 to Length(cid) div b do begin
+    s := '';
+    for j := 1 to b do s := s + cid[(i-1)*b+j];
+    j := l.IndexOf(s);
     if j < 0 then break;
     w := Integer(l.Objects[j]);
     ws := ws + WideChar(w);
@@ -502,7 +557,6 @@ var
     xy: TDblXY;
     bt: boolean;
     Tlm, Tm, m1, m2: TMatrix;
-    c: char;
     poly: boolean;
   begin
     ss:= TStringList.Create;
@@ -516,46 +570,7 @@ var
         LPO.LuaPrint.Canvas.Pen.JoinStyle:= pjsMiter;
         LPO.LuaPrint.Canvas.Pen.EndCap:= pecFlat;
         while sp^ <> #0 do begin
-          while sp^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(sp);
-          if sp^ = #0 then Break;
-          cm := '';
-          if sp^ in ['(', '<', '[', '{'] then begin
-            case sp^ of
-              '(': c := ')';
-              '<': c := '>';
-              '[': c := ']';
-              '{': c := '}';
-            end;
-            i:= 0;
-            cm := sp^;
-            Inc(sp);
-            while (sp^ <> #0) and ((i > 0) or (sp^ <> c)) do begin
-              if sp^ = cm[1] then begin
-                Inc(i);
-              end else if sp^ = c then begin
-                Dec(i);
-              end;
-              cm := cm + sp^;
-              Inc(sp);
-            end;
-            if sp^ <> #0 then begin
-              cm := cm + sp^;
-              Inc(sp);
-            end;
-          end else begin
-            case sp^ of
-              '/', '%': begin
-                cm := sp^;
-                Inc(sp);
-              end
-            end;
-            while not (sp^ in [#0, #$09, #$0a, #$0c, #$0d, ' ',
-             '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']) do begin
-              cm := cm + sp^;
-              Inc(sp);
-            end;
-          end;
-
+          cm := TokenStr(sp);
           if cm = 'BT' then begin
             bt := True;
             Tlm[1][1] := 1; Tlm[1][2]:=0;Tlm[1][3]:=0;
@@ -963,9 +978,9 @@ begin
 
     PageW := 0;
     PageH := 0;
-    sp1 := strpos(PChar(pageobj.val), '/MediaBox[');
-    if sp1 <> nil then begin
-      Inc(sp1, 10);
+    s := pdfr.GetVal('/MediaBox', pageobj.val);
+    if s <> '' then begin
+      sp1 := PChar(s) + 1;
       TokenStr(sp1);
       TokenStr(sp1);
       PageW := StrToFloat(TokenStr(sp1));
@@ -1005,24 +1020,17 @@ begin
       pdfobj := pdfr.FindObj(IntToStr(Integer(fonts.Objects[i])));
       fonts.Objects[i] := nil;
       if pdfobj <> nil then begin
-        sp1 := strpos(PChar(pdfobj.val), '/ToUnicode');
-        if sp1 <> nil then begin
-          Inc(sp1, 11);
-          pdfobj := pdfr.FindObj(TokenStr(sp1));
-          if pdfobj <> nil then begin
-            fonts.Objects[i] := TFontObj.Create;
-            TFontObj(fonts.Objects[i]).make_l(pdfobj.stream);
-          end;
+        s := pdfr.GetVal('/ToUnicode', pdfobj.val);
+        if s <> ''then begin
+          fonts.Objects[i] := TFontObj.Create;
+          TFontObj(fonts.Objects[i]).make_l(s);
         end;
       end;
     end;
 
-    sp1 := strpos(PChar(pageobj.val), '/Contents');
-    if sp1 = nil then Exit;
-    Inc(sp1, 10);
-    pageobj := pdfr.FindObj(TokenStr(sp1));
-    //sl.Text:=cmd; sl.SaveToFile('3.txt');
-    DrawPage(pageobj.stream);
+    s := pdfr.GetVal('/Contents', pageobj.val);
+    //sl.Text:=s; sl.SaveToFile('3.txt');
+    DrawPage(s);
   finally
     for i := 0 to fonts.Count-1 do fonts.Objects[i].Free;
     fonts.Free;
