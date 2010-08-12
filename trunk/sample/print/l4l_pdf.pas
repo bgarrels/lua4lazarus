@@ -74,7 +74,15 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure make_l(const s: string);
-    function cid2utf8(const cid: string): string;
+    procedure cid2utf8(const cid: string; objs: TObjectList);
+    procedure ascii_w(const ascii: string; objs: TObjectList);
+  end;
+
+  TCidObj = class
+  public
+    utf8: string;
+    utf16: word;
+    width: integer;
   end;
 
 function mempos(str1, str2: PChar; l: integer) : PChar;
@@ -400,14 +408,15 @@ function TPDFReader.GetVal(const name, arr: string): string;
     if (sp^ = '<') and ((sp+1)^ = '<') then begin
       c:= 0;
       sp1 := sp + 2;
-      while sp1^ <> #0 do begin
+      while True do begin
         if (sp1^ = '<') and ((sp1+1)^ = '<') then begin
           Inc(sp1);
           Inc(c);
         end;
         if (sp1^ = '>') and ((sp1+1)^ = '>') then begin
           if c = 0 then begin
-            Result := Copy(sp, 1, sp1-sp+2);
+            SetLength(Result, sp1-sp+2);
+            move(sp^, Result[1], sp1-sp+2);
             Exit;
           end else
             Dec(c);
@@ -448,10 +457,14 @@ constructor TFontObj.Create;
 begin
   inherited Create;
   l := TStringList.Create;
+  l.Sorted:= True;
 end;
 
 destructor TFontObj.Destroy;
+var
+  i: Integer;
 begin
+  for i := 0 to l.Count-1 do l.Objects[i].Free;
   l.Free;
   inherited Destroy;
 end;
@@ -461,6 +474,7 @@ var
   p, p1: PChar;
   s1, s2, s3, s4: string;
   i, c1, c2, c3: integer;
+  cid: TCidObj;
 begin
   p := strpos(PChar(s), 'beginbfchar');
   if p = nil then Exit;
@@ -472,8 +486,11 @@ begin
     if (s1 = '') or (s1 = 'endbfchar') then break;
     b := Length(s1) - 2;
     s2 := TokenStr(p);
-    l.AddObject(Copy(s1, 2, b),
-     TObject(StrToInt('$' + Copy(s2, 2, Length(s2)-2))));
+    cid := TCidObj.Create;
+    cid.utf16:= StrToInt('$' + Copy(s2, 2, Length(s2)-2));
+    cid.utf8:= UTF8Encode(WideString(WideChar(cid.utf16)));
+    cid.width:= 0;
+    l.AddObject(Copy(s1, 2, b), cid);
   end;
 
   p := strpos(PChar(s), 'beginbfrange');
@@ -491,38 +508,53 @@ begin
       p1 := PChar(s3) + 1;
       while (p1^ <> ']') and (c1 + i <= c2) do begin
         s4 := TokenStr(p1);
-        l.AddObject(IntToHex(c1+i, b),
-         TObject(StrToInt('$' + Copy(s4, 2, Length(s4)-2))));
+        cid := TCidObj.Create;
+        cid.utf16:= StrToInt('$' + Copy(s4, 2, Length(s4)-2));
+        cid.utf8:= UTF8Encode(WideString(WideChar(cid.utf16)));
+        cid.width:= 0;
+        l.AddObject(IntToHex(c1+i, b), cid);
         Inc(i);
       end;
     end else begin
       c3 := StrToInt('$'+Copy(s3, 2, Length(s3)-2));
       i := 0;
       while c1 + i <= c2 do begin
-        l.AddObject(IntToHex(c1+i, b), TObject(c3+i));
+        cid := TCidObj.Create;
+        cid.utf16:= c3 + i;
+        cid.utf8:= UTF8Encode(WideString(WideChar(cid.utf16)));
+        cid.width:= 0;
+        l.AddObject(IntToHex(c1+i, b), cid);
         Inc(i);
       end;
     end;
   end;
 end;
 
-function TFontObj.cid2utf8(const cid: string): string;
+procedure TFontObj.cid2utf8(const cid: string; objs: TObjectList);
 var
-  ws: WideString;
   s: string;
   i, j: integer;
-  w: word;
 begin
-  ws := '';
   for i := 1 to Length(cid) div b do begin
     s := '';
     for j := 1 to b do s := s + cid[(i-1)*b+j];
     j := l.IndexOf(s);
     if j < 0 then break;
-    w := Integer(l.Objects[j]);
-    ws := ws + WideChar(w);
+    objs.Add(l.Objects[j]);
   end;
-  Result := UTF8Encode(ws);
+end;
+
+procedure TFontObj.ascii_w(const ascii: string; objs: TObjectList);
+var
+  s: string;
+  i, j: integer;
+begin
+  for i := 1 to Length(ascii) do begin
+    s := IntToHex(Byte(ascii[i]), b);
+    j := l.IndexOf(s);
+    if j < 0 then break;
+    objs.Add(l.Objects[j]);
+  end;
 end;
 
 procedure DrawPDF(stream: TStream; LPO: TLuaPrintObject; page: integer;
@@ -548,7 +580,7 @@ var
   procedure DrawPage(const cmd: string);
   var
     ss: TStringList;
-    params: TObjectList;
+    params, texts: TObjectList;
     i, j, l, Tf_index: integer;
     s, s1, s2, cm, Tf: string;
     sx, sy, x1, y1, x2, y2: double;
@@ -562,6 +594,7 @@ var
     ss:= TStringList.Create;
     try
       params := TObjectList.Create(True);
+      texts := TObjectList.Create(False);
       try
         sp := PChar(cmd);
         bt := False;
@@ -878,40 +911,65 @@ var
             ss.Clear;
           end else if cm = 'Tj' then begin
             s := ss[ss.Count-1];
-            if s[1] = '(' then begin
-              Delete(s, 1, 1); Delete(s, Length(s), 1);
-            end else if s[1] = '<' then begin
-              Delete(s, 1, 1); Delete(s, Length(s), 1);
-              if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil) then
-                s := TFontObj(fonts.Objects[Tf_index]).cid2utf8(s);
-            end;
-
-            m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
-            m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
-            m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
-            m2 := matrixmul(m1, Tm);
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_height(%d)',
-             [-Trunc(m2[2][2]*Rate)]));
-            LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
-             [Integer(bsClear)]));
-            LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
-
-            l := UTF8Length(s);
-            for j := 1 to l do begin
-              s2 := UTF8Copy(s, j, 1);
-              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
-               [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s2]));
-              m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
-              m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-              m1[3][1]:= (Tc+Tw)*Th;
-              m1[3][2]:= 0; m1[3][3]:= 1;
-              Tm := matrixmul(m1, Tm);
-              Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
+            texts.Clear;
+            while True do begin
+              if s[1] = '(' then begin
+                Delete(s, 1, 1); Delete(s, Length(s), 1);
+                if s = '' then break;
+                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
+                 and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
+                  TFontObj(fonts.Objects[Tf_index]).ascii_w(s, texts);
+              end else if s[1] = '<' then begin
+                Delete(s, 1, 1); Delete(s, Length(s), 1);
+                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
+                 and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
+                  TFontObj(fonts.Objects[Tf_index]).cid2utf8(s, texts);
+                if texts.Count = 0 then Break;
+                s := '';
+              end;
 
               m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
               m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
               m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
               m2 := matrixmul(m1, Tm);
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_height(%d)',
+               [-Trunc(m2[2][2]*Rate)]));
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
+               [Integer(bsClear)]));
+              LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
+
+              if s = '' then begin
+                l := texts.Count;
+              end else begin
+                l := UTF8Length(s);
+              end;
+              for j := 1 to l do begin
+                if s = '' then begin
+                  s2 := TCidObj(texts[j-1]).utf8;
+                end else begin
+                  s2 := UTF8Copy(s, j, 1);
+                end;
+                LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
+                 [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s2]));
+                m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
+                m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
+                if (texts.Count > 0) and (TCidObj(texts[j-1]).width <> 0) then begin
+                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc+Tw)*Th;
+                  m1[3][2]:= 0; m1[3][3]:= 1;
+                  Tm := matrixmul(m1, Tm);
+                end else begin
+                  m1[3][1]:= (Tc+Tw)*Th;
+                  m1[3][2]:= 0; m1[3][3]:= 1;
+                  Tm := matrixmul(m1, Tm);
+                  Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
+                end;
+
+                m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
+                m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
+                m1[3][1]:= 0;         m1[3][2]:= Trise; m1[3][3]:= 1;
+                m2 := matrixmul(m1, Tm);
+              end;
+              break;
             end;
             ss.Clear;
           end else if cm = 'TJ' then begin
@@ -919,12 +977,20 @@ var
             sp1 := PChar(s) + 1;
             while sp1^ <> ']' do begin
               s1 := TokenStr(sp1);
+              texts.Clear;
               if s1[1] = '<' then begin
                 Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
-                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil) then
-                  s1 := TFontObj(fonts.Objects[Tf_index]).cid2utf8(s1);
+                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
+                 and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
+                  TFontObj(fonts.Objects[Tf_index]).cid2utf8(s1, texts);
+                if texts.Count = 0 then continue;
+                s1 := '';
               end else if s1[1] = '(' then begin
                 Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
+                if s1 = '' then continue;
+                if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
+                 and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
+                  TFontObj(fonts.Objects[Tf_index]).ascii_w(s1, texts);
               end else begin
                 m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
                 m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
@@ -943,17 +1009,31 @@ var
               LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.brush_style(%d)',
                [Integer(bsClear)]));
               LPO.LuaPrint.Canvas.Font.Height:= -Trunc(m2[2][2]);
-              l := UTF8Length(s1);
+              if s1 = '' then begin
+                l := texts.Count;
+              end else begin
+                l := UTF8Length(s1);
+              end;
               for j := 1 to l do begin
-                s2 := UTF8Copy(s1, j, 1);
+                if s1 = '' then begin
+                  s2 := TCidObj(texts[j-1]).utf8;
+                end else begin
+                  s2 := UTF8Copy(s1, j, 1);
+                end;
                 LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.textout(%d,%d,"%s")',
                  [Trunc(m2[3][1]*Rate), Trunc((PageH-m2[3][2]-m2[2][2])*Rate), s2]));
                 m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
                 m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
-                m1[3][1]:= (Tc+Tw)*Th;
-                m1[3][2]:= 0; m1[3][3]:= 1;
-                Tm := matrixmul(m1, Tm);
-                Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
+                if (texts.Count > 0) and (TCidObj(texts[j-1]).width <> 0) then begin
+                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc+Tw)*Th;
+                  m1[3][2]:= 0; m1[3][3]:= 1;
+                  Tm := matrixmul(m1, Tm);
+                end else begin
+                  m1[3][1]:= (Tc+Tw)*Th;
+                  m1[3][2]:= 0; m1[3][3]:= 1;
+                  Tm := matrixmul(m1, Tm);
+                  Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
+                end;
 
                 m1[1][1] := Tfs * Th; m1[1][2]:=0;   m1[1][3]:=0;
                 m1[2][1]:=0;          m1[2][2]:=Tfs; m1[2][3]:=0;
@@ -967,6 +1047,7 @@ var
         end; // while
       finally
         params.Free;
+        texts.Free;
       end;
     finally
       ss.Free;
@@ -975,11 +1056,12 @@ var
 
 var
   pdfr: TPDFReader;
-  pageobj, pdfobj: TPDFObj;
-  i: integer;
-  s: string;
+  pageobj, pdfobj, pdfobj2: TPDFObj;
+  i, j, k: integer;
+  s, s1: string;
   sp1: PChar;
   sl: TStringList; // for debug
+  fs: TFileStream; // for debug
 begin
   sl:= TStringList.Create;
   pdfr := TPDFReader.Create(stream);
@@ -1033,16 +1115,56 @@ begin
       fonts.Objects[i] := nil;
       if pdfobj <> nil then begin
         s := pdfr.GetVal('/ToUnicode', pdfobj.val);
-        // ToDo Get width. from /Widths[]
+        fonts.Objects[i] := TFontObj.Create;
         if s <> ''then begin
-          fonts.Objects[i] := TFontObj.Create;
           TFontObj(fonts.Objects[i]).make_l(s);
+        end else begin
+          TFontObj(fonts.Objects[i]).b:= 4;
+        end;
+        s := pdfr.GetVal('/Widths', pdfobj.val);
+        if s <> '' then begin
+          sp1 := PChar(s) + 1;
+          j := StrToIntDef(pdfr.GetVal('/FirstChar', pdfobj.val), 0);
+          while sp1^ <> ']' do begin
+            s1 := IntToHex(j, TFontObj(fonts.Objects[i]).b);
+            k := TFontObj(fonts.Objects[i]).l.IndexOf(s1);
+            if k < 0 then begin
+              k := TFontObj(fonts.Objects[i]).l.AddObject(s1, TCidObj.Create);
+            end;
+            TCidObj(TFontObj(fonts.Objects[i]).l.Objects[k]).width := StrToInt(TokenStr(sp1));
+            Inc(j);
+          end;
+        end else begin
+          s := pdfr.GetVal('/FontDescriptor', pdfobj.val);
+          if s = '' then begin
+            s := pdfr.GetVal('/DescendantFonts', pdfobj.val);
+            if s <> '' then begin
+              sp1 := PChar(s) + 1;
+              pdfobj2 := pdfr.FindObj(TokenStr(sp1));
+              s := pdfr.GetVal('/FontDescriptor', pdfobj2.val);
+            end;
+          end;
+          if s <> '' then begin
+            s1 := pdfr.GetVal('/Flags', s);
+            if StrToIntDef(s1, 0) and 1 <> 0 then begin
+              //FixedPitch
+              for j := 0 to TFontObj(fonts.Objects[i]).l.Count-1 do begin
+                if Length(TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).utf8) = 1 then
+                  TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 500
+                else
+                  TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 1000;
+              end;
+            end;
+          end;
         end;
       end;
     end;
 
     s := pdfr.GetVal('/Contents', pageobj.val);
     //sl.Text:=s; sl.SaveToFile('3.txt');
+    //fs:= TFileStream.Create('3.txt', fmOpenWrite);
+    //fs.WriteBuffer(s[1], Length(s));
+    //fs.Free;
     DrawPage(s);
   finally
     for i := 0 to fonts.Count-1 do fonts.Objects[i].Free;
