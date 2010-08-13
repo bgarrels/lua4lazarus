@@ -71,6 +71,7 @@ type
   public
     b: integer;
     l: TStringList;
+    font_name, font_file_no: string;
     constructor Create;
     destructor Destroy; override;
     procedure make_l(const s: string);
@@ -907,6 +908,12 @@ var
           end else if cm = 'Tf' then begin
             Tf := ss[ss.Count-2];
             Tf_index := fonts.IndexOf(Tf);
+            if Tf_index >= 0 then begin
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_name("%s")',
+               [TFontObj(fonts.Objects[Tf_index]).font_name]));
+              LPO.LuaPrint.Canvas.Font.Name:=
+               TFontObj(fonts.Objects[Tf_index]).font_name;
+            end;
             Tfs := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
           end else if cm = 'Tj' then begin
@@ -1114,13 +1121,57 @@ begin
       pdfobj := pdfr.FindObj(IntToStr(Integer(fonts.Objects[i])));
       fonts.Objects[i] := nil;
       if pdfobj <> nil then begin
-        s := pdfr.GetVal('/ToUnicode', pdfobj.val);
         fonts.Objects[i] := TFontObj.Create;
+        sp1 := strpos(PChar(pdfobj.val), '/BaseFont');
+        if sp1 <> nil then begin
+          Inc(sp1, 9);
+          while sp1^ <> '/' do Inc(sp1);
+          Inc(sp1);
+          TFontObj(fonts.Objects[i]).font_name := '';
+          while not(sp1^ in ['/', #$0a, #$0d, ' ']) do begin
+            TFontObj(fonts.Objects[i]).font_name :=
+             TFontObj(fonts.Objects[i]).font_name + sp1^;
+            Inc(sp1);
+          end;
+        end;
+
+        s := pdfr.GetVal('/ToUnicode', pdfobj.val);
         if s <> ''then begin
           TFontObj(fonts.Objects[i]).make_l(s);
         end else begin
           TFontObj(fonts.Objects[i]).b:= 4;
         end;
+
+        s := pdfr.GetVal('/FontDescriptor', pdfobj.val);
+        if s = '' then begin
+          s := pdfr.GetVal('/DescendantFonts', pdfobj.val);
+          if s <> '' then begin
+            sp1 := PChar(s) + 1;
+            pdfobj2 := pdfr.FindObj(TokenStr(sp1));
+            s := pdfr.GetVal('/FontDescriptor', pdfobj2.val);
+          end;
+        end;
+        if s <> '' then begin
+          sp1 := strpos(PChar(s), '/FontFile');
+          if sp1 <> nil then begin
+            Inc(sp1, 9);
+            if sp1^ <> ' ' then Inc(sp1);
+            Inc(sp1);
+            TFontObj(fonts.Objects[i]).font_file_no := TokenStr(sp1);
+          end;
+
+          s1 := pdfr.GetVal('/Flags', s);
+          if StrToIntDef(s1, 0) and 1 <> 0 then begin
+            //FixedPitch
+            for j := 0 to TFontObj(fonts.Objects[i]).l.Count-1 do begin
+              if Length(TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).utf8) = 1 then
+                TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 500
+              else
+                TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 1000;
+            end;
+          end;
+        end;
+
         s := pdfr.GetVal('/Widths', pdfobj.val);
         if s <> '' then begin
           sp1 := PChar(s) + 1;
@@ -1133,28 +1184,6 @@ begin
             end;
             TCidObj(TFontObj(fonts.Objects[i]).l.Objects[k]).width := StrToInt(TokenStr(sp1));
             Inc(j);
-          end;
-        end else begin
-          s := pdfr.GetVal('/FontDescriptor', pdfobj.val);
-          if s = '' then begin
-            s := pdfr.GetVal('/DescendantFonts', pdfobj.val);
-            if s <> '' then begin
-              sp1 := PChar(s) + 1;
-              pdfobj2 := pdfr.FindObj(TokenStr(sp1));
-              s := pdfr.GetVal('/FontDescriptor', pdfobj2.val);
-            end;
-          end;
-          if s <> '' then begin
-            s1 := pdfr.GetVal('/Flags', s);
-            if StrToIntDef(s1, 0) and 1 <> 0 then begin
-              //FixedPitch
-              for j := 0 to TFontObj(fonts.Objects[i]).l.Count-1 do begin
-                if Length(TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).utf8) = 1 then
-                  TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 500
-                else
-                  TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 1000;
-              end;
-            end;
           end;
         end;
       end;
