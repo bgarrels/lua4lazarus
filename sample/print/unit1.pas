@@ -26,6 +26,7 @@ type
     procedure FormCreate(Sender: TObject);
   private
     { private declarations }
+    procedure GetFontName(var FontName: string);
   public
     { public declarations }
   end; 
@@ -123,6 +124,7 @@ begin
       //lua_register(L, 'CreateStringsObject', @CreateStringsObject);
       l4l_PushLuaObject(TLuaPrintObject.Create(L, lp)); lua_setglobal(L, 'P');
       try
+        lp.OnGetFontName := @GetFontName;
         lp.BeginDoc(Rect(2000, 3000, 2000, 3000));
         try
           lp.Run(Memo2.Text);
@@ -151,6 +153,13 @@ begin
   finally
     lua_close(L);
   end;
+end;
+
+procedure TForm1.GetFontName(var FontName: string);
+begin
+{$IFDEF WINDOWS}
+  if FontName = 'MS-Gothic' then FontName := 'MS Gothic';
+{$ENDIF}
 end;
 
 end.

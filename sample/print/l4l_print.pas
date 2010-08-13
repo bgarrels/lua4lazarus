@@ -12,7 +12,7 @@ unit l4l_print;
 
 {$mode objfpc}{$H+}
 
-{$DEFINE USE_AGG}
+{.$DEFINE USE_AGG}
 
 interface
 
@@ -22,10 +22,13 @@ uses
 
 type
 
+  TOnGetFontNameEvent = procedure(var FontName: string) of object;
+
   { TLuaPrint }
 
   TLuaPrint = class(TObject)
   private
+    FOnGetFontName: TOnGetFontNameEvent;
     FCanvasStack: TObjectList;
     function GetPageCount: integer;
     function GetPageSize: TSize;
@@ -66,6 +69,7 @@ type
     property Canvas: TCanvas read FCanvas;
     procedure PushCanvas;
     procedure PopCanvas;
+    property OnGetFontName: TOnGetFontNameEvent read FOnGetFontName write FOnGetFontName;
   end;
 
   { TLuaPrintObject }
@@ -90,6 +94,7 @@ type
     function LP2DP(lp: integer): integer;
     constructor Create(L : Plua_State; lp: TLuaPrint); overload;
     destructor Destroy; override;
+    procedure GetFontName(var FontName: string);
   published
     function l4l_TextOut: integer;
     function l4l_Rectangle: integer;
@@ -563,6 +568,12 @@ begin
     end;
   end;
   Result:= Trunc(lp * LuaPrint.FDPI / i + 0.5);
+end;
+
+procedure TLuaPrintObject.GetFontName(var FontName: string);
+begin
+  if Assigned(LuaPrint.FOnGetFontName) then
+    LuaPrint.FOnGetFontName(FontName);
 end;
 
 constructor TLuaPrintObject.Create(L: Plua_State; lp: TLuaPrint);
