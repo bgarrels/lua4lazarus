@@ -158,6 +158,7 @@ end;
 procedure TForm1.GetFontName(var FontName: string);
 begin
 {$IFDEF WINDOWS}
+  // From PostScript FontName to Windows FontName.
   if FontName = 'MS-Gothic' then FontName := 'MS Gothic';
 {$ENDIF}
 end;
