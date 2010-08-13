@@ -7,6 +7,11 @@ unit l4l_pdf;
     License: New BSD
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
+    Note:
+      Not support embedded font.
+      Not full support color function.
+
+    ToDo:
 }
 
 {$mode objfpc}{$H+}
@@ -588,7 +593,6 @@ var
     Tl, Tc, Tw, Tfs, Th, Trise: double;
     sp, sp1: PChar;
     xy: TDblXY;
-    bt: boolean;
     Tlm, Tm, m1, m2: TMatrix;
     poly: boolean;
   begin
@@ -598,7 +602,6 @@ var
       texts := TObjectList.Create(False);
       try
         sp := PChar(cmd);
-        bt := False;
         Tl:=0; Tc := 0; Tw := 0; Trise:=0; Th:=1;
         Tf := ''; Tf_index := -1;
         LPO.LuaPrint.Canvas.Pen.JoinStyle:= pjsMiter;
@@ -606,14 +609,12 @@ var
         while sp^ <> #0 do begin
           cm := TokenStr(sp);
           if cm = 'BT' then begin
-            bt := True;
             Tlm[1][1] := 1; Tlm[1][2]:=0;Tlm[1][3]:=0;
             Tlm[2][1] := 0; Tlm[2][2]:=1;Tlm[2][3]:=0;
             Tlm[3][1] := 0; Tlm[3][2]:=0;Tlm[3][3]:=1;
             Tm := Tlm;
             ss.Clear;
           end else if cm = 'ET' then begin
-            bt := False;
             ss.Clear;
           end else if cm = 'q' then begin
             LPO.LuaPrint.PushCanvas;
@@ -902,6 +903,9 @@ var
           end else if cm = 'Tz' then begin
             Th := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
+          end else if cm = 'Tr' then begin
+          //  Tmode := StrToInt(ss[ss.Count-1]);
+            ss.Clear;
           end else if cm = 'Ts' then begin
             Trise := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
@@ -909,10 +913,9 @@ var
             Tf := ss[ss.Count-2];
             Tf_index := fonts.IndexOf(Tf);
             if Tf_index >= 0 then begin
-              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_name("%s")',
-               [TFontObj(fonts.Objects[Tf_index]).font_name]));
-              LPO.LuaPrint.Canvas.Font.Name:=
-               TFontObj(fonts.Objects[Tf_index]).font_name;
+              s := TFontObj(fonts.Objects[Tf_index]).font_name;
+              LPO.LuaPrint.AddOrder(Format(PRUN_NAME + '.font_name("%s")', [s]));
+              LPO.LuaPrint.Canvas.Font.Name:= s;
             end;
             Tfs := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
@@ -1127,12 +1130,15 @@ begin
           Inc(sp1, 9);
           while sp1^ <> '/' do Inc(sp1);
           Inc(sp1);
-          TFontObj(fonts.Objects[i]).font_name := '';
+          s := '';
           while not(sp1^ in ['/', #$0a, #$0d, ' ']) do begin
-            TFontObj(fonts.Objects[i]).font_name :=
-             TFontObj(fonts.Objects[i]).font_name + sp1^;
+            s := s + sp1^;
             Inc(sp1);
           end;
+          j := Pos('+', s);
+          s := Copy(s, j+1, Length(s));
+          LPO.GetFontName(s);
+          TFontObj(fonts.Objects[i]).font_name := s;
         end;
 
         s := pdfr.GetVal('/ToUnicode', pdfobj.val);
