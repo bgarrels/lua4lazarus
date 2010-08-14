@@ -9,6 +9,7 @@ unit l4l_pdf;
 
     Note:
       Not support embedded font.
+      Not support draw image.
       Not full support color function.
 
     ToDo:
@@ -126,10 +127,15 @@ begin
     Result := p^;
     Inc(p);
     while (p^ <> #0) and ((i > 0) or (p^ <> c)) do begin
-      if p^ = Result[1] then begin
-        Inc(i);
-      end else if p^ = c then begin
-        Dec(i);
+      if (c = ')') and (p^ = '\') and ((p+1)^ in ['(', ')']) then begin
+        Result := Result + p^;
+        Inc(p);
+      end else begin
+        if (p^ = Result[1]) then begin
+          Inc(i);
+        end else if (p^ = c) then begin
+          Dec(i);
+        end;
       end;
       Result := Result + p^;
       Inc(p);
@@ -598,6 +604,7 @@ begin
     j := l.IndexOf(s);
     if j < 0 then break;
     objs.Add(l.Objects[j]);
+    if TCidObj(l.Objects[j]).utf8 = '\' then objs.Add(l.Objects[j]);
   end;
 end;
 
@@ -631,6 +638,30 @@ var
           Result[i][j] := Result[i][j] + m1[i][k] * m2[k][j];
         end;
       end;
+    end;
+  end;
+
+  function LStrObj2Str(const str:string): string;
+  var
+    i: integer;
+  begin
+    Result := '';
+    i := 1;
+    while i <= Length(str) do begin
+      if str[i] = '\' then begin
+        if i < Length(str) then begin
+           case str[i+1] of
+             '(', ')': ;
+             '\': begin
+               Result := Result + '\\';
+               Inc(i);
+             end;
+             else Inc(i);
+           end;
+        end;
+      end else
+        Result := Result + str[i];
+      Inc(i);
     end;
   end;
 
@@ -976,6 +1007,7 @@ var
             while True do begin
               if s[1] = '(' then begin
                 Delete(s, 1, 1); Delete(s, Length(s), 1);
+                s := LStrObj2Str(s);
                 if s = '' then break;
                 if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
                  and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
@@ -1015,11 +1047,13 @@ var
                 m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
                 m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
                 if (texts.Count > 0) and (TCidObj(texts[j-1]).width <> 0) then begin
-                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc+Tw)*Th;
+                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc)*Th;
+                  if s2 = ' ' then m1[3][1]:= m1[3][1] + Tw*Th;
                   m1[3][2]:= 0; m1[3][3]:= 1;
                   Tm := matrixmul(m1, Tm);
                 end else begin
-                  m1[3][1]:= (Tc+Tw)*Th;
+                  m1[3][1]:= Tc*Th;
+                  if s2 = ' ' then m1[3][1]:= m1[3][1] + Tw*Th;
                   m1[3][2]:= 0; m1[3][3]:= 1;
                   Tm := matrixmul(m1, Tm);
                   Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
@@ -1048,6 +1082,7 @@ var
                 s1 := '';
               end else if s1[1] = '(' then begin
                 Delete(s1, 1, 1); Delete(s1, Length(s1), 1);
+                s1 := LStrObj2Str(s1);
                 if s1 = '' then continue;
                 if (Tf_index >= 0) and (fonts.Objects[Tf_index] <> nil)
                  and (TFontObj(fonts.Objects[Tf_index]).l.Count > 0) then
@@ -1086,11 +1121,13 @@ var
                 m1[1][1]:= 1; m1[1][2]:=0; m1[1][3]:=0;
                 m1[2][1]:= 0; m1[2][2]:=1; m1[2][3]:=0;
                 if (texts.Count > 0) and (TCidObj(texts[j-1]).width <> 0) then begin
-                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc+Tw)*Th;
+                  m1[3][1]:= (TCidObj(texts[j-1]).width*Tfs/1000+Tc)*Th;
+                  if s2 = ' ' then m1[3][1]:= m1[3][1] + Tw*Th;
                   m1[3][2]:= 0; m1[3][3]:= 1;
                   Tm := matrixmul(m1, Tm);
                 end else begin
-                  m1[3][1]:= (Tc+Tw)*Th;
+                  m1[3][1]:= Tc*Th;
+                  if s2 = ' ' then m1[3][1]:= m1[3][1] + Tw*Th;
                   m1[3][2]:= 0; m1[3][3]:= 1;
                   Tm := matrixmul(m1, Tm);
                   Tm[3][1]:= Tm[3][1] + LPO.LuaPrint.Canvas.TextWidth(s2)*Th;
@@ -1230,6 +1267,9 @@ begin
               else
                 TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 1000;
             end;
+          end else begin
+            for j := 0 to TFontObj(fonts.Objects[i]).l.Count-1 do
+              TCidObj(TFontObj(fonts.Objects[i]).l.Objects[j]).width := 1000;
           end;
         end;
 
@@ -1251,11 +1291,23 @@ begin
     end;
 
     s := pdfr.GetVal('/Contents', pageobj.val);
-    //sl.Text:=s; sl.SaveToFile('3.txt');
-    //fs:= TFileStream.Create('3.txt', fmOpenWrite);
-    //fs.WriteBuffer(s[1], Length(s));
-    //fs.Free;
-    DrawPage(s);
+    if s <> '' then begin
+      if s[1] = '[' then begin
+        s1 := s;
+        sp1 := PChar(s1) + 1;
+        s := '';
+        while sp1^ <> ']' do begin
+          pdfobj := pdfr.FindObj(TokenStr(sp1));
+          TokenStr(sp1); TokenStr(sp1);
+          s := s + pdfobj.stream;
+        end;
+      end;
+      //sl.Text:=s; sl.SaveToFile('1.txt');
+      //fs:= TFileStream.Create('3.txt', fmOpenWrite);
+      //fs.WriteBuffer(s[1], Length(s));
+      //fs.Free;
+      DrawPage(s);
+    end;
   finally
     for i := 0 to fonts.Count-1 do fonts.Objects[i].Free;
     fonts.Free;
