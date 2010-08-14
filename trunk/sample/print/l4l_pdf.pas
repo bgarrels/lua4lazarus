@@ -164,9 +164,45 @@ begin
   FontNameTable.Sorted:= True;
 {$IFDEF WINDOWS}
   FontNameTable.Text:=
-   'MS-Gothic=MS Gothic'#$0d +
-   'MS-Mincho=MS Mincho'
-  ;
+   'ArialMT=Arial' + #$0d +
+   'Arial-Black=Arial Black' + #$0d +
+   'Arial-BoldMT=Arial Bold' + #$0d +
+   'Arial-BoldItalicMT=Arial Bold Italic' + #$0d +
+   'Arial-ItalicMT=Arial Italic' + #$0d +
+   'ArialNarrow=Arial Narrow' + #$0d +
+   'ArialNarrow-Bold=Arial Narrow Bold' + #$0d +
+   'ArialNarrow-BoldItalic=Arial Narrow Bold Italic' + #$0d +
+   'ArialNarrow-Italic=Arial Narrow Italic' + #$0d +
+   'ArialUnicodeMS=Arial Unicode MS' + #$0d +
+
+   'CenturyGothic=Century Gothic' + #$0d +
+   'CenturyGothic-Bold=Century Gothic Bold' + #$0d +
+   'CenturyGothic-BoldItalic=Century Gothic Bold Italic' + #$0d +
+   'CenturyGothic-Italic=Century Gothic Italic' + #$0d +
+
+   'ComicSansMS=Comic Sans MS' + #$0d +
+   'ComicSansMS-Bold=Comic Sans MS Bold' + #$0d +
+
+   'MS-Gothic=MS Gothic' + #$0d +
+   'MS-Mincho=MS Mincho' + #$0d +
+   'MS-PGothic=MS PGothic' + #$0d +
+   'MS-PMincho=MS PMincho' + #$0d +
+
+   'SymbolMT=Symbol' + #$0d +
+   'Tahoma-Bold=Tahoma Bold' + #$0d +
+   'TimesNewRomanPSMT=Times New Roman' + #$0d +
+   'TimesNewRomanPS-BoldMT=Times New Roman Bold' + #$0d +
+   'TimesNewRomanPS-BoldItalicMT=Times New Roman Bold Italic' + #$0d +
+   'TimesNewRomanPS-ItalicMT=Times New Roman Italic' + #$0d +
+
+   'Verdana-Bold=Verdana Bold' + #$0d +
+   'Verdana-BoldItalic=Verdana Bold Italic' + #$0d +
+   'Verdana-Italic=Verdana Italic' + #$0d +
+   'Wingdings-Regular=Wingdings' + #$0d +
+   'Wingdings2=Wingdings 2' + #$0d +
+   'Wingdings3=Wingdings 3' + #$0d +
+
+   '';
 {$ENDIF}
 end;
 
