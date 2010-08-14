@@ -155,6 +155,21 @@ begin
   while p^ in [#$09, #$0a, #$0c, #$0d, ' '] do Inc(p);
 end;
 
+var
+  FontNameTable: TStringList;
+
+procedure CreateFontNameTable;
+begin
+  FontNameTable := TStringList.Create;
+  FontNameTable.Sorted:= True;
+{$IFDEF WINDOWS}
+  FontNameTable.Text:=
+   'MS-Gothic=MS Gothic'#$0d +
+   'MS-Mincho=MS Mincho'
+  ;
+{$ENDIF}
+end;
+
 { TPDF }
 
 constructor TPDFReader.Create(Astream: TStream);
@@ -1137,6 +1152,10 @@ begin
           end;
           j := Pos('+', s);
           s := Copy(s, j+1, Length(s));
+          if FontNameTable.Count > 0 then begin
+            s1 := FontNameTable.Values[s];
+            if s1 <> '' then s := s1;
+          end;
           LPO.GetFontName(s);
           TFontObj(fonts.Objects[i]).font_name := s;
         end;
@@ -1209,5 +1228,9 @@ begin
   end;
 end;
 
+initialization
+  CreateFontNameTable;
+finalization
+  FontNameTable.Free;
 end.
 
