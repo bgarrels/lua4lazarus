@@ -22,13 +22,10 @@ uses
 
 type
 
-  TOnGetFontNameEvent = procedure(var FontName: string) of object;
-
   { TLuaPrint }
 
   TLuaPrint = class(TObject)
   private
-    FOnGetFontName: TOnGetFontNameEvent;
     FCanvasStack: TObjectList;
     function GetPageCount: integer;
     function GetPageSize: TSize;
@@ -69,7 +66,6 @@ type
     property Canvas: TCanvas read FCanvas;
     procedure PushCanvas;
     procedure PopCanvas;
-    property OnGetFontName: TOnGetFontNameEvent read FOnGetFontName write FOnGetFontName;
   end;
 
   { TLuaPrintObject }
@@ -572,8 +568,7 @@ end;
 
 procedure TLuaPrintObject.GetFontName(var FontName: string);
 begin
-  if Assigned(LuaPrint.FOnGetFontName) then
-    LuaPrint.FOnGetFontName(FontName);
+  // ToDo
 end;
 
 constructor TLuaPrintObject.Create(L: Plua_State; lp: TLuaPrint);
