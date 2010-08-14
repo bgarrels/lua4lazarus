@@ -35,10 +35,13 @@ const
 type
   TStrokeType = (tstNone, tstM, tstRe, tstBez);
 
+  { TDblXY }
+
   TDblXY = class
   public
     tst: TStrokeType;
     x, y: double;
+    constructor Create;
   end;
 
   TMatrix = array[1..3, 1..3] of double;
@@ -91,6 +94,13 @@ type
     utf16: word;
     width: integer;
   end;
+
+{ TDblXY }
+
+constructor TDblXY.Create;
+begin
+  tst := tstNone;
+end;
 
 function mempos(str1, str2: PChar; l: integer) : PChar;
 var
@@ -716,12 +726,26 @@ var
             params.Add(xy);
             ss.Clear;
           end else if cm = 'l' then begin
+            if TDblXY(params[params.Count-1]).tst = tstBez then begin
+              xy := TDblXY.Create;
+              xy.tst:= tstM;
+              xy.x:= TDblXY(params[params.Count-1]).x;
+              xy.y := TDblXY(params[params.Count-1]).y;
+              params.Add(xy);
+            end;
             xy := TDblXY.Create;
             xy.x:= StrToFloat(ss[ss.Count-2]);
             xy.y := StrToFloat(ss[ss.Count-1]);
             params.Add(xy);
             ss.Clear;
           end else if cm = 'c' then begin
+            if TDblXY(params[params.Count-1]).tst = tstNone then begin
+              xy := TDblXY.Create;
+              xy.tst:= tstM;
+              xy.x:= TDblXY(params[params.Count-1]).x;
+              xy.y := TDblXY(params[params.Count-1]).y;
+              params.Add(xy);
+            end;
             xy := TDblXY.Create;
             xy.tst:= tstBez;
             xy.x:= StrToFloat(ss[ss.Count-6]);
@@ -1302,7 +1326,7 @@ begin
           s := s + pdfobj.stream;
         end;
       end;
-      //sl.Text:=s; sl.SaveToFile('1.txt');
+      sl.Text:=s; sl.SaveToFile('1.txt');
       //fs:= TFileStream.Create('3.txt', fmOpenWrite);
       //fs.WriteBuffer(s[1], Length(s));
       //fs.Free;
