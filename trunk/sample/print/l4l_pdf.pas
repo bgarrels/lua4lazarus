@@ -653,7 +653,7 @@ var
 
   function LStrObj2Str(const str:string): string;
   var
-    i: integer;
+    i, j: integer;
   begin
     Result := '';
     i := 1;
@@ -666,11 +666,20 @@ var
                Result := Result + '\\';
                Inc(i);
              end;
+             '0'..'9': begin // ToDo
+               if i+3 > Length(str) then Break;
+               Result := Result +
+                Char((Byte(str[i+1])-Byte('0')) shl 6 +
+                 (Byte(str[i+2])-Byte('0')) shl 3 +
+                 (Byte(str[i+3])-Byte('0')));
+               Inc(i, 3);
+             end;
              else Inc(i);
            end;
         end;
       end else
         Result := Result + str[i];
+
       Inc(i);
     end;
   end;
@@ -1007,7 +1016,7 @@ var
             Tw := StrToFloat(ss[ss.Count-1]);
             ss.Clear;
           end else if cm = 'Tz' then begin
-            Th := StrToFloat(ss[ss.Count-1]);
+            Th := StrToFloat(ss[ss.Count-1]) / 100;
             ss.Clear;
           end else if cm = 'Tr' then begin
           //  Tmode := StrToInt(ss[ss.Count-1]);
@@ -1326,7 +1335,7 @@ begin
           s := s + pdfobj.stream;
         end;
       end;
-      sl.Text:=s; sl.SaveToFile('1.txt');
+      //sl.Text:=s; sl.SaveToFile('1.txt');
       //fs:= TFileStream.Create('3.txt', fmOpenWrite);
       //fs.WriteBuffer(s[1], Length(s));
       //fs.Free;
