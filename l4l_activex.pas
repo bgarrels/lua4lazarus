@@ -136,7 +136,7 @@ var
   di: TDispID;
   s, func: string;
   ws: WideString;
-  arglist, pp: lPVariantArg;
+  arglist, pp: {$IFDEF VER2_4}lPVariantArg{$ELSE}PVariantArg{$ENDIF};
   param: TDispParams;
   v, ret: OleVariant;
 begin
@@ -151,7 +151,7 @@ begin
   func:= lua_tostring(L, -1);
   ws:= UTF8Decode(func);
   ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
-  GetMem(arglist, SizeOf(VariantArg) * (c-t));
+  GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
   try
     // 逆順で
     pp := arglist;
@@ -163,11 +163,15 @@ begin
         LUA_TSTRING: v := lua_tostring(L, i);
       end;
       VariantInit(TVarData(pp^));
-      pp^ := VariantArg(v);
+      pp^ := {$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}(v);
       Inc(pp);
     end;
     param.cArgs := c - t;
+{$IFDEF VER2_4}
     param.rgvarg := arglist;
+{$ELSE}
+    param.rgvarg := PVariantArgList(arglist);
+{$ENDIF}
     param.rgdispidNamedArgs := nil;
     param.cNamedArgs := 0;
     VariantInit(TVarData({%H-}ret));
