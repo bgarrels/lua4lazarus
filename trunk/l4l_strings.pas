@@ -3,10 +3,14 @@
 
     StringsObject
 
-    License: BSD
+    License: New BSD
+      Copyright(c)2010- Malcome@Japan All rights reserved.
 
     Version History:
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
+
+    ToDo:
+      UTF8
 }
 unit l4l_strings;
 
