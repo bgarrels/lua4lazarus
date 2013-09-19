@@ -71,6 +71,7 @@ begin
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
   id:= IDispatch(p^);
+  lua_pop(L, 1);
   key := lua_tostring(L, 2);
   ws:= UTF8Decode(key);
   ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
@@ -110,6 +111,7 @@ begin
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
   id:= IDispatch(p^);
+  lua_pop(L, 1);
   key := lua_tostring(L, 2);
   ws:= UTF8Decode(key);
   ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
@@ -147,8 +149,10 @@ begin
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
   id:= IDispatch(p^);
+  lua_pop(L, 1);
   lua_getfield(L, 1, FIELD_FN);
   func:= lua_tostring(L, -1);
+  lua_pop(L, 1);
   ws:= UTF8Decode(func);
   ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
   GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
@@ -214,6 +218,7 @@ begin
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
   id:= IDispatch(p^);
+  lua_pop(L, 1);
   if lua_isnil(L, 3) then begin
     i := 0;
   end else begin
@@ -270,6 +275,7 @@ begin
   p:= lua_touserdata(L, 1);
   IDispatch(p^)._Release;
   //IDispatch(p^):= nil;
+  //IDispatch(p^):= Unassigned;
   Result:= 0;
 end;
 
@@ -298,34 +304,40 @@ begin
 
   ChkErr(L, id.GetTypeInfo(0, 0, ti));
   if ti = nil then Exit;
-  ChkErr(L, ti.GetTypeAttr(ta));
+  ti._AddRef;
   try
-    for i := 0 to ta^.cFuncs - 1 do
-    begin
-      ChkErr(L, ti.GetFuncDesc(i, fd));
-      try
-        ChkErr(L, ti.GetDocumentation(fd^.memid, @ws, nil, nil, nil));
-        s := UTF8Encode(ws);
-        lua_pushstring(L, PChar(s));
-        lua_newtable(L);
-        lua_pushstring(L, FIELD_FN);
-        lua_pushstring(L, PChar(s));
-        lua_settable(L, -3);
-        lua_newtable(L);
-        lua_pushstring(L, '__call');
-        lua_pushcfunction(L, @call);
-        lua_settable(L, -3);
-        lua_pushstring(L, '__index');
-        lua_pushvalue(L, t); // SuperClass
-        lua_settable(L, -3);
-        lua_setmetatable(L, -2);
-        lua_settable(L, -3);
-      finally
-        ti.ReleaseFuncDesc(fd);
+    ChkErr(L, ti.GetTypeAttr(ta));
+    try
+      for i := 0 to ta^.cFuncs - 1 do
+      begin
+        ChkErr(L, ti.GetFuncDesc(i, fd));
+        try
+          ChkErr(L, ti.GetDocumentation(fd^.memid, @ws, nil, nil, nil));
+          s := UTF8Encode(ws); ws:= '';
+          lua_pushstring(L, PChar(s));
+          lua_newtable(L);
+          lua_pushstring(L, FIELD_FN);
+          lua_pushstring(L, PChar(s));
+          lua_settable(L, -3);
+          lua_newtable(L);
+          lua_pushstring(L, '__call');
+          lua_pushcfunction(L, @call);
+          lua_settable(L, -3);
+          lua_pushstring(L, '__index');
+          lua_pushvalue(L, t); // SuperClass
+          lua_settable(L, -3);
+          lua_setmetatable(L, -2);
+          lua_settable(L, -3);
+        finally
+          ti.ReleaseFuncDesc(fd);
+        end;
       end;
+    finally
+      ti.ReleaseTypeAttr(ta);
     end;
   finally
-    ti.ReleaseTypeAttr(ta);
+    ti._Release;
+    ti:= Unassigned;
   end;
 
   lua_newtable(L);
