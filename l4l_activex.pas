@@ -74,28 +74,26 @@ begin
   lua_pop(L, 1);
   key := lua_tostring(L, 2);
   ws:= UTF8Decode(key);
-  if id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di) = 0 then begin
-    param.rgvarg := nil;
-    param.rgdispidNamedArgs := nil;
-    param.cArgs := 0;
-    param.cNamedArgs := 0;
-    VariantInit(TVarData({%H-}ret));
-    ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-     DISPATCH_PROPERTYGET, param, @ret, nil, nil), key);
-    case VarType(ret) of
-      varNull: lua_pushnil(L);
-      varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
-      varSingle,varDouble: lua_pushnumber(L, ret);
-      varBoolean: lua_pushboolean(L, ret);
-      varDispatch: DoCreateActiveXObject(L, ret);
-      else begin
-        ws := ret;
-        s := UTF8Encode(ws);
-        lua_pushstring(L, PChar(s));
-      end;
+  ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
+  param.rgvarg := nil;
+  param.rgdispidNamedArgs := nil;
+  param.cArgs := 0;
+  param.cNamedArgs := 0;
+  VariantInit(TVarData({%H-}ret));
+  ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+   DISPATCH_PROPERTYGET, param, @ret, nil, nil), key);
+  case VarType(ret) of
+    varNull: lua_pushnil(L);
+    varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
+    varSingle,varDouble: lua_pushnumber(L, ret);
+    varBoolean: lua_pushboolean(L, ret);
+    varDispatch: DoCreateActiveXObject(L, ret);
+    else begin
+      ws := ret;
+      s := UTF8Encode(ws);
+      lua_pushstring(L, PChar(s));
     end;
-  end else
-    lua_pushnil(L);
+  end;
   Result := 1;
 end;
 
