@@ -18,7 +18,7 @@ interface
 
 uses
   Classes, SysUtils, contnrs, graphics, printers, types,
-  lua, l4l_object;
+  lua52, l4l_object;
 
 type
 
@@ -186,7 +186,7 @@ uses
 {$IFDEF USE_AGG}
   agg_lcl, agg_fpimage, fpcanvas, {agg_color,}
 {$ENDIF}
-  LCLType, LCLIntf, typinfo, lauxlib, l4l_pdf, graphmath;
+  LCLType, LCLIntf, typinfo, l4l_pdf, graphmath;
 
 const
   MM_P_INCH = 2540;

@@ -7,6 +7,7 @@
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
     Version History:
+      1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
 
     ToDo:
@@ -19,7 +20,7 @@ unit l4l_strings;
 interface
 
 uses
-  Classes, SysUtils, lua, l4l_object;
+  Classes, SysUtils, lua52, l4l_object;
 
 type
 

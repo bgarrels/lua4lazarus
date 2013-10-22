@@ -31,7 +31,7 @@ var
 
 implementation
 uses
-  Lua, lualib, lauxlib, l4l_object;
+  Lua52, l4l_object;
 
 {$R *.lfm}
 

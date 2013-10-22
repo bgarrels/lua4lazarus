@@ -27,7 +27,7 @@ var
 
 implementation
 uses
-  Lua, lauxlib, l4l_activex;
+  Lua52, l4l_activex;
 
 {$R *.lfm}
 
@@ -63,8 +63,7 @@ begin
   Memo2.Clear;
   L:= lua_newstate(@alloc, nil);
   try
-    //luaopen_base(L);
-    //luaopen_string(L);
+    luaL_openlibs(L);
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateActiveXObject', @CreateActiveXObject);
     try
