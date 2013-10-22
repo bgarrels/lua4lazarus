@@ -32,7 +32,7 @@ var
 
 implementation
 uses
-  Lua, lualib, lauxlib, l4l_object, l4l_strings, l4l_myutils;
+  Lua52, l4l_object, l4l_strings, l4l_myutils;
 
 {$R *.lfm}
 
@@ -100,8 +100,7 @@ begin
   Memo2.Clear;
   L:= lua_newstate(@alloc, nil);
   try
-    luaopen_base(L);
-    //luaopen_string(L);
+    luaL_openlibs(L);
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateStringsObject', @CreateStringsObject);
     lua_register(L, 'CreateDbfObject', @CreateDbfObject);

@@ -11,6 +11,7 @@
       - Event.
 
     Version History:
+      1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
       1.0.0 by Malcome@Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
 
     License for Lua 5.0 and later versions:
@@ -23,7 +24,7 @@ unit l4l_object;
 interface
 
 uses
-  Classes, SysUtils, lua;
+  Classes, SysUtils, lua52;
 
 type
 
@@ -47,7 +48,7 @@ function l4l_toobject(L : Plua_State;  n: Integer): TLuaObject;
 
 implementation
 uses
-  typinfo, lauxlib;
+  typinfo;
 
 const
   FIELD_OBJ = '___l4lObject___';
@@ -84,7 +85,7 @@ begin
   try
     Result := method();
   except
-    on E: Exception do luaL_error(L, PChar(E.Message), []);
+    on E: Exception do luaL_error(L, PChar(E.Message));
   end;
 end;
 
@@ -107,7 +108,7 @@ begin
     try
       pi := FindPropInfo(obj, PROP_HEAD + key);
     except
-      luaL_error(L, 'Unknown property: "%s".', [PChar(key)]);
+      luaL_error(L, 'Unknown property: "%s".', PChar(key));
     end;
     try
       case pi^.PropType^.Kind of
@@ -134,7 +135,7 @@ begin
         end;
       end;
     except
-      on E: Exception do luaL_error(L, PChar(E.Message), []);
+      on E: Exception do luaL_error(L, PChar(E.Message));
     end;
   end;
   Result := 1;
@@ -155,7 +156,7 @@ begin
   try
     pi := FindPropInfo(obj, PROP_HEAD + key);
   except
-    luaL_error(L, 'Unknown property: "%s".', [PChar(key)]);
+    luaL_error(L, 'Unknown property: "%s".', PChar(key));
   end;
   try
     case pi^.PropType^.Kind of
@@ -176,7 +177,7 @@ begin
       end;
     end;
   except
-    on E: Exception do luaL_error(L, PChar(E.Message), []);
+    on E: Exception do luaL_error(L, PChar(E.Message));
   end;
 end;
 
@@ -202,7 +203,7 @@ begin
   try
     Result := obj.Iterator(i);
   except
-    on E: Exception do luaL_error(L, PChar(E.Message), []);
+    on E: Exception do luaL_error(L, PChar(E.Message));
   end;
 end;
 

@@ -18,6 +18,7 @@
       Event handling.
 
     Version History:
+      1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
 
     License for Lua 5.0 and later versions:
@@ -30,13 +31,13 @@ unit l4l_activex;
 interface
 
 uses
-  Classes, SysUtils, lua;
+  Classes, SysUtils, lua52;
 
 function CreateActiveXObject(L : Plua_State) : Integer; cdecl;
 
 implementation
 uses
-  Windows, ComObj, ActiveX, variants, varutils, lauxlib;
+  Windows, ComObj, ActiveX, variants, varutils;
 
 const
   FIELD_ID = '___IDispatch___';
@@ -52,7 +53,7 @@ begin
   if not(Succeeded(Val)) then begin
     s:= Format('ActiveX Error(%x)', [Val]);
     if prop <> '' then s := s + ' in "' + prop + '".';
-    luaL_error(L, PChar(s), []);
+    luaL_error(L, PChar(s));
   end;
 end;
 
