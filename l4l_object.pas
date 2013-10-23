@@ -291,9 +291,11 @@ begin
   Result:= False;
   if lua_istable(L, n) then begin
     lua_getfield(L, n, FIELD_OBJ);
-    p:= lua_touserdata(L, -1);
+    if not lua_isnil(L, -1) then begin
+      p:= lua_touserdata(L, -1);
+      Result := TObject(p^) is c;
+    end;
     lua_remove(L, -1);
-    Result := TObject(p^) is c;
   end;
 end;
 
@@ -304,9 +306,11 @@ begin
   Result:= nil;
   if lua_istable(L, n) then begin
     lua_getfield(L, n, FIELD_OBJ);
-    p:= lua_touserdata(L, -1);
+    if not lua_isnil(L, -1) then begin
+      p:= lua_touserdata(L, -1);
+      Result := TLuaObject(p^);
+    end;
     lua_remove(L, -1);
-    Result := TLuaObject(p^);
   end;
 end;
 
