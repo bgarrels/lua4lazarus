@@ -27,7 +27,7 @@ var
 
 implementation
 uses
-  Lua52, l4l_object, l4l_activex, l4l_myutils;
+  Lua52, l4l_object, l4l_integer, l4l_activex, l4l_myutils;
 
 {$R *.lfm}
 
@@ -66,6 +66,8 @@ begin
     luaL_openlibs(L);
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateActiveXObject', @CreateActiveXObject);
+    lua_register(L, 'CreateInteger', @CreateInteger);
+    lua_register(L, 'CreateVar', @CreateVar);
     l4l_PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils');
     try
       s:= Memo1.Text;

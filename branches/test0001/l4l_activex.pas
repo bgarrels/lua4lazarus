@@ -7,12 +7,6 @@
       Copyright(c)2010- Malcome@Japan All rights reserved.
 
     Note:
-       The property name is case insensitive, but
-      the function name is case sensitive.
-       Then, you may use the property name with the small letter
-      if ActiveXObject has same name in property and function name.
-       ex. excel.Visible = true; excel.Visible(); ---> ERROR!
-           excel.visible = true; excel.Visible(); ---> OK!
 
     ToDo:
       Event handling.
@@ -20,9 +14,6 @@
     Version History:
       1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
-
-    License for Lua 5.0 and later versions:
-      Copyright(c)1994–2008 Lua.org, PUC-Rio.
 }
 unit l4l_activex;
 
@@ -34,16 +25,19 @@ uses
   Classes, SysUtils, lua52;
 
 function CreateActiveXObject(L : Plua_State) : Integer; cdecl;
+function CreateVar(L : Plua_State) : Integer; cdecl;
 
 implementation
 uses
-  Windows, ComObj, ActiveX, variants, varutils;
+  Windows, ComObj, ActiveX, variants, varutils, l4l_object, l4l_integer;
 
 const
   FIELD_ID = '___IDispatch___';
   FIELD_FN = '___FuncName___';
   FIELD_IC = '___IteCount___';
+  FIELD_NoParamFuncCallResult = '___NoParamFuncCallResult___';
 
+function call(L : Plua_State) : Integer; cdecl; forward;
 procedure DoCreateActiveXObject(L : Plua_State; id: IDispatch); forward;
 
 procedure ChkErr(L : Plua_State; Val: HResult; const prop: string='');
@@ -51,15 +45,87 @@ var
   s: string;
 begin
   if not(Succeeded(Val)) then begin
-    s:= Format('ActiveX Error(%x)', [Val]);
+    case val of
+      DISP_E_MEMBERNOTFOUND: s:= 'Member Not Found';
+      DISP_E_TYPEMISMATCH: s:= 'Type Mismatch';
+      DISP_E_UNKNOWNNAME: s:= 'Unknown Name';
+      DISP_E_BADPARAMCOUNT: s:= 'Bad Param Count';
+      else s:= 'ActiveX Error';
+    end;
+    s:= s + Format('(%x)', [Val]);
     if prop <> '' then s := s + ' in "' + prop + '".';
     luaL_error(L, PChar(s));
   end;
 end;
 
+procedure Lua2Var(L : Plua_State; va: POleVariant; index: integer; toWideStr: boolean = True);
+var
+  i, j: integer;
+  p: POleVariant;
+  obj: TLuaObject;
+  hp: TVarArrayBoundArray;
+begin
+  VariantInit(TVarData(va^));
+  case lua_type(L, index) of
+    LUA_TNIL: va^:= VarAsType(va^, varNull);
+    LUA_TBOOLEAN: va^:= lua_toboolean(L, index);
+    LUA_TNUMBER: va^:= lua_tonumber(L, index);
+    LUA_TSTRING: begin
+      if toWideStr then
+        va^:= UTF8Decode(lua_tostring(L, index))
+      else
+        va^:= lua_tostring(L, index);
+    end;
+    LUA_TTABLE: begin
+      lua_pushstring(L, FIELD_ID);
+      lua_rawget(L, index);
+      if lua_isnil(L, -1) then begin
+        obj:= l4l_toobject(L, index);
+        if not Assigned(obj) then begin
+          j:= lua_rawlen(L, index);
+          if j > 0 then begin
+            //va^:= VarArrayCreate([0, j-1], varVariant);
+            hp[0].LowBound:= 0;
+            hp[0].ElementCount:= j;
+            TVarData(va^).vType:= varVariant or varArray;
+            TVarData(va^).vArray:= SafeArrayCreate(varVariant, 1, hp);
+            SafeArrayAccessData(TVarData(va^).vArray, p{%H-});
+            for i:= 1 to j do begin
+              lua_rawgeti(L, index, i);
+              Lua2Var(L, p, lua_gettop(L));
+              lua_pop(L, 1);
+              Inc(p);
+            end;
+            SafeArrayUnaccessData(TVarData(va^).vArray);
+          end else begin
+            TVarData(va^).vType:= varVariant or varArray;
+            TVarData(va^).vArray:= nil;
+          end;
+        end else begin
+          // TLuaObject
+          if obj is TLuaInteger then begin
+            va^:= TLuaInteger(obj).Value;
+          end else begin
+            va^:= VarAsType(va^, varNull);
+          end;
+        end;
+      end else begin
+        p:= lua_touserdata(L, -1);
+        //if TVarData(p^).vtype = varDispatch then begin
+        //  va^:= p^;
+        //end else begin
+          TVarData(va^).vtype:= varVariant or varByRef;
+          TVarData(va^).vpointer:= p;
+        //end;
+      end;
+      lua_pop(L, 1);
+    end;
+  end{case};
+end;
+
 function Index(L : Plua_State) : Integer; cdecl;
 var
-  p: PPointer;
+  p: POleVariant;
   key: string;
   s: string;
   ws: WideString;
@@ -67,40 +133,136 @@ var
   di: TDispID;
   param: TDispParams;
   ret: OleVariant;
+  try1, try2: HResult;
 begin
-  Result := 0;
+  Result:= 0;
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  id:= IDispatch(p^);
   lua_pop(L, 1);
   key := lua_tostring(L, 2);
-  ws:= UTF8Decode(key);
-  ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
-  param.rgvarg := nil;
-  param.rgdispidNamedArgs := nil;
-  param.cArgs := 0;
-  param.cNamedArgs := 0;
-  VariantInit(TVarData({%H-}ret));
-  ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-   DISPATCH_PROPERTYGET, param, @ret, nil, nil), key);
-  case VarType(ret) of
-    varNull: lua_pushnil(L);
-    varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
-    varSingle,varDouble: lua_pushnumber(L, ret);
-    varBoolean: lua_pushboolean(L, ret);
-    varDispatch: DoCreateActiveXObject(L, ret);
-    else begin
-      ws := ret;
-      s := UTF8Encode(ws);
-      lua_pushstring(L, PChar(s));
+
+  if TVarData(p^).vtype <> varDispatch then begin
+    key:= LowerCase(key);
+    if key = 'value' then begin
+      case VarType(p^) of
+        varNull: lua_pushnil(L);
+        varSmallint,varInteger,varByte: lua_pushinteger(L, p^);
+        varSingle,varDouble: lua_pushnumber(L, p^);
+        varBoolean: lua_pushboolean(L, p^);
+        // TODO: varArray
+        else begin
+          ws := p^;
+          s := UTF8Encode(ws);
+          lua_pushstring(L, PChar(s));
+        end;
+      end;
+    end else
+      Exit;
+  end else begin
+    id:= IDispatch(TVarData(p^).vDispatch);
+    ws:= UTF8Decode(key);
+    ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
+    param.rgvarg := nil;
+    param.rgdispidNamedArgs := nil;
+    param.cArgs := 0;
+    param.cNamedArgs := 0;
+    VariantInit(TVarData({%H-}ret));
+
+    if id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+     DISPATCH_PROPERTYGET or DISPATCH_METHOD, param, @ret, nil, nil) = 0 then begin
+      case VarType(ret) of
+        varNull: lua_pushnil(L);
+        varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
+        varSingle,varDouble: lua_pushnumber(L, ret);
+        varBoolean: lua_pushboolean(L, ret);
+        varDispatch: DoCreateActiveXObject(L, ret);
+        else begin
+          ws := ret;
+          s := UTF8Encode(ws);
+          lua_pushstring(L, PChar(s));
+        end;
+      end;
+
+      if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+      lua_pushstring(L, '__call');
+      lua_pushcfunction(L, @call);
+      lua_settable(L, -3);
+      //lua_pushstring(L, '__index');
+      //lua_pushvalue(L, 1); // SuperClass
+      //lua_settable(L, -3);
+      lua_setmetatable(L, -2);
+    end else begin
+      // Return Table for function(method) call
+      lua_newtable(L);
+      lua_pushstring(L, FIELD_FN);
+      lua_pushstring(L, PChar(key));
+      lua_settable(L, -3);
+      lua_newtable(L);
+      lua_pushstring(L, '__call');
+      lua_pushcfunction(L, @call);
+      lua_settable(L, -3);
+      lua_pushstring(L, '__index');
+      lua_pushvalue(L, 1); // SuperClass
+      lua_settable(L, -3);
+      lua_setmetatable(L, -2);
     end;
+
+    (*
+    try1:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+                     DISPATCH_METHOD, param, @ret, nil, nil);
+    if try1 <> 0 then begin
+      try2:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+                       DISPATCH_PROPERTYGET, param, @ret, nil, nil);
+    end;
+
+    if (try1 = 0) or (try2 <> 0) then begin
+      // Return Table for function(method) call
+      lua_newtable(L);
+      lua_pushstring(L, FIELD_FN);
+      lua_pushstring(L, PChar(key));
+      lua_settable(L, -3);
+      lua_newtable(L);
+      lua_pushstring(L, '__call');
+      lua_pushcfunction(L, @call);
+      lua_settable(L, -3);
+      lua_pushstring(L, '__index');
+      lua_pushvalue(L, 1); // SuperClass
+      lua_settable(L, -3);
+      lua_setmetatable(L, -2);
+
+      if try1 = 0 then begin
+        // Save No Params Call Result
+        lua_pushstring(L, FIELD_NoParamFuncCallResult);
+        p:= lua_newuserdata(L, SizeOf(OleVariant));
+        VariantInit(TVarData(p^));
+        p^:= ret;
+        lua_rawset(L, -3);
+      end;
+
+    end else begin
+      // Return property value
+      case VarType(ret) of
+        varNull: lua_pushnil(L);
+        varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
+        varSingle,varDouble: lua_pushnumber(L, ret);
+        varBoolean: lua_pushboolean(L, ret);
+        varDispatch: DoCreateActiveXObject(L, ret);
+        else begin
+          ws := ret;
+          s := UTF8Encode(ws);
+          lua_pushstring(L, PChar(s));
+        end;
+      end;
+    end;
+    *)
+
   end;
   Result := 1;
 end;
 
 function NewIndex(L : Plua_State) : Integer; cdecl;
 var
-  p: PPointer;
+  p: POleVariant;
   key: string;
   ws: WideString;
   id: IDispatch;
@@ -111,104 +273,114 @@ begin
   Result:=0;
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  id:= IDispatch(p^);
   lua_pop(L, 1);
   key := lua_tostring(L, 2);
-  ws:= UTF8Decode(key);
-  ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
-  case lua_type(L, 3) of
-    LUA_TNIL: VariantInit(TVarData({%H-}v));
-    LUA_TBOOLEAN: v := lua_toboolean(L, 3);
-    LUA_TNUMBER: v := lua_tonumber(L, 3);
-    else v := lua_tostring(L, 3);
+
+  if TVarData(p^).vtype <> varDispatch then begin
+    key:= LowerCase(key);
+    if key = 'value' then begin
+      Lua2Var(L, p, 3, False);
+    end else
+      Exit;
+  end else begin
+    id:= IDispatch(TVarData(p^).vDispatch);
+    ws:= UTF8Decode(key);
+    ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), key);
+    Lua2Var(L, @v, 3);
+    diput := DISPID_PROPERTYPUT;
+    param.rgvarg := @v;
+    param.cArgs := 1;
+    param.rgdispidNamedArgs := @diput;
+    param.cNamedArgs := 1;
+    ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+     DISPATCH_PROPERTYPUT, param, nil, nil, nil), key);
   end;
-  diput := DISPID_PROPERTYPUT;
-  param.rgvarg := @v;
-  param.cArgs := 1;
-  param.rgdispidNamedArgs := @diput;
-  param.cNamedArgs := 1;
-  ChkErr(L, id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-   DISPATCH_PROPERTYPUT, param, nil, nil, nil), key);
 end;
 
 function call(L : Plua_State) : Integer; cdecl;
 var
   i, c, t: integer;
-  p: PPointer;
+  p: POleVariant;
   id: IDispatch;
   di: TDispID;
   s, func: string;
   ws: WideString;
   arglist, pp: {$IFDEF VER2_4}lPVariantArg{$ELSE}PVariantArg{$ENDIF};
   param: TDispParams;
-  v, ret: OleVariant;
+  ret: OleVariant;
 begin
   Result:= 0;
   c:= lua_gettop(L);
-  t:= 1;
-  if lua_istable(L, 2) then Inc(t); { it's x:x() }
+  t:= 1; // ToDo: const?
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  id:= IDispatch(p^);
   lua_pop(L, 1);
-  lua_getfield(L, 1, FIELD_FN);
-  func:= lua_tostring(L, -1);
-  lua_pop(L, 1);
-  ws:= UTF8Decode(func);
-  ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
-  GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
-  try
-    // 逆順で
-    pp := arglist;
-    for i := c downto t+1 do begin
-      VariantInit(TVarData({%H-}v));
-      case lua_type(L, i) of
-        LUA_TBOOLEAN: v := lua_toboolean(L, i);
-        LUA_TNUMBER: v := lua_tonumber(L, i);
-        LUA_TSTRING: v := lua_tostring(L, i);
-      end;
-      VariantInit(TVarData(pp^));
-      pp^ := {$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}(v);
-      Inc(pp);
-    end;
-    param.cArgs := c - t;
-{$IFDEF VER2_4}
-    param.rgvarg := arglist;
-{$ELSE}
-    param.rgvarg := PVariantArgList(arglist);
-{$ENDIF}
-    param.rgdispidNamedArgs := nil;
-    param.cNamedArgs := 0;
-    VariantInit(TVarData({%H-}ret));
+  if TVarData(p^).vtype <> varDispatch then Exit;
+  id:= IDispatch(TVarData(p^).vDispatch);
 
-    ChkErr(L, id.Invoke(
-     di,
-     GUID_NULL,
-     GetUserDefaultLCID,
-     DISPATCH_PROPERTYGET or DISPATCH_METHOD,
-     param, @ret, nil, nil), func);
-    case VarType(ret) of
-      varNull: lua_pushnil(L);
-      varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
-      varSingle,varDouble: lua_pushnumber(L, ret);
-      varBoolean: lua_pushboolean(L, ret);
-      varDispatch: DoCreateActiveXObject(L, ret);
-      else begin
-        ws := ret;
-        s := UTF8Encode(ws);
-        lua_pushstring(L, PChar(s));
+  //if c - t = 0 then begin
+  //  // Load No Params Call Result
+  //  lua_pushstring(L, FIELD_NoParamFuncCallResult);
+  //  lua_rawget(L, 1);
+  //  p:= lua_touserdata(L, -1);
+  //  VariantInit(TVarData({%H-}ret));
+  //  ret:= p^;
+  //  lua_pop(L, 1);
+  //end else begin
+    lua_getfield(L, 1, FIELD_FN);
+    func:= lua_tostring(L, -1);
+    lua_pop(L, 1);
+    ws:= UTF8Decode(func);
+    ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
+    GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
+    try
+      // 逆順で
+      pp := arglist;
+      for i := c downto t+1 do begin
+        Lua2Var(L, POleVariant(pp), i);
+        Inc(pp);
       end;
+      param.cArgs := c - t;
+  {$IFDEF VER2_4}
+      param.rgvarg := arglist;
+  {$ELSE}
+      param.rgvarg := PVariantArgList(arglist);
+  {$ENDIF}
+      param.rgdispidNamedArgs := nil;
+      param.cNamedArgs := 0;
+      VariantInit(TVarData({%H-}ret));
+
+      ChkErr(L, id.Invoke(
+       di,
+       GUID_NULL,
+       GetUserDefaultLCID,
+       DISPATCH_PROPERTYGET or DISPATCH_METHOD,
+       param, @ret, nil, nil), func);
+    finally
+      FreeMem(arglist);
     end;
-    Result := 1;
-  finally
-    FreeMem(arglist);
+  //end;
+
+  case VarType(ret) of
+    varNull: lua_pushnil(L);
+    varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
+    varSingle,varDouble: lua_pushnumber(L, ret);
+    varBoolean: lua_pushboolean(L, ret);
+    varDispatch: DoCreateActiveXObject(L, ret);
+    else{case} begin
+      ws := ret;
+      s := UTF8Encode(ws);
+      lua_pushstring(L, PChar(s));
+    end;
   end;
+
+  Result := 1;
 end;
 
 function iterator(L : Plua_State) : Integer; cdecl;
 var
   i: integer;
-  p: PPointer;
+  p: POleVariant;
   id: IDispatch;
   s: string;
   ws: WideString;
@@ -218,8 +390,11 @@ begin
   Result:= 0;
   lua_getfield(L, 1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  id:= IDispatch(p^);
   lua_pop(L, 1);
+
+  if TVarData(p^).vtype <> varDispatch then Exit;
+
+  id:= IDispatch(TVarData(p^).vDispatch);
   if lua_isnil(L, 3) then begin
     i := 0;
   end else begin
@@ -271,76 +446,87 @@ end;
 
 function gc(L : Plua_State) : Integer; cdecl;
 var
-  p: PPointer;
+  p: POleVariant;
+  id: IDispatch;
 begin
+  Result:= 0;
   p:= lua_touserdata(L, 1);
-  IDispatch(p^)._Release;
+  if TVarData(p^).vtype <> varDispatch then Exit;
+  id:= IDispatch(TVarData(p^).vDispatch);
+  id._Release;
   //IDispatch(p^):= nil;
   //IDispatch(p^):= Unassigned;
-  Result:= 0;
 end;
 
 procedure DoCreateActiveXObject(L : Plua_State; id: IDispatch);
 var
-  i, t: integer;
-  p: PPointer;
+  p: POleVariant;
+  (*
+  i: integer;
+  t: integer;
   s: string;
   ws: WideString;
   ti: ITypeInfo;
   ta: lPTypeAttr;
   fd: lPFuncDesc;
+  hr: HRESULT;
+  *)
 begin
   id._AddRef;
-  lua_newtable(L); t:= lua_gettop(L);
+  lua_newtable(L); //t:= lua_gettop(L);
 
   lua_pushstring(L, FIELD_ID);
-  p:= lua_newuserdata(L, SizeOf(IDispatch));
-  p^:=id;
+  p:= lua_newuserdata(L, SizeOf(OleVariant));
+  VariantInit(TVarData(p^));
+  p^:= id;
   if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
   lua_pushstring(L, '__gc');
   lua_pushcfunction(L, @gc);
   lua_settable(L, -3);
   lua_setmetatable(L, -2);
   lua_settable(L, -3);
-
-  ChkErr(L, id.GetTypeInfo(0, 0, ti));
-  if ti = nil then Exit;
-  ti._AddRef;
-  try
-    ChkErr(L, ti.GetTypeAttr(ta));
+  (*
+  hr:= id.GetTypeInfo(0, 0, ti);
+  if (hr = 0) and (ti <> nil) then begin
+    ti._AddRef;
     try
-      for i := 0 to ta^.cFuncs - 1 do
-      begin
-        ChkErr(L, ti.GetFuncDesc(i, fd));
-        try
-          ChkErr(L, ti.GetDocumentation(fd^.memid, @ws, nil, nil, nil));
-          s := UTF8Encode(ws); ws:= '';
-          lua_pushstring(L, PChar(s));
-          lua_newtable(L);
-          lua_pushstring(L, FIELD_FN);
-          lua_pushstring(L, PChar(s));
-          lua_settable(L, -3);
-          lua_newtable(L);
-          lua_pushstring(L, '__call');
-          lua_pushcfunction(L, @call);
-          lua_settable(L, -3);
-          lua_pushstring(L, '__index');
-          lua_pushvalue(L, t); // SuperClass
-          lua_settable(L, -3);
-          lua_setmetatable(L, -2);
-          lua_settable(L, -3);
-        finally
-          ti.ReleaseFuncDesc(fd);
+      ChkErr(L, ti.GetTypeAttr(ta));
+      try
+        for i := 0 to ta^.cFuncs - 1 do
+        begin
+          ChkErr(L, ti.GetFuncDesc(i, fd));
+          try
+            ChkErr(L, ti.GetDocumentation(fd^.memid, @ws, nil, nil, nil));
+            s := UTF8Encode(ws); ws:= '';
+            lua_pushstring(L, PChar(s));
+            lua_newtable(L);
+            lua_pushstring(L, FIELD_FN);
+            lua_pushstring(L, PChar(s));
+            lua_settable(L, -3);
+            lua_newtable(L);
+            lua_pushstring(L, '__call');
+            lua_pushcfunction(L, @call);
+            lua_settable(L, -3);
+            lua_pushstring(L, '__index');
+            lua_pushvalue(L, t); // SuperClass
+            lua_settable(L, -3);
+            lua_setmetatable(L, -2);
+            lua_settable(L, -3);
+          finally
+            ti.ReleaseFuncDesc(fd);
+          end;
         end;
+      finally
+        ti.ReleaseTypeAttr(ta);
       end;
     finally
-      ti.ReleaseTypeAttr(ta);
+      ti._Release;
+      ti:= Unassigned;
     end;
-  finally
-    ti._Release;
-    ti:= Unassigned;
+  end else if hr <> E_NOTIMPL then begin
+    ChkErr(L, hr, 'CreateActiveXObject');
   end;
-
+  *)
   lua_newtable(L);
   lua_pushstring(L, '__newindex');
   lua_pushcfunction(L, @NewIndex);
@@ -357,6 +543,40 @@ end;
 function CreateActiveXObject(L : Plua_State) : Integer; cdecl;
 begin
   DoCreateActiveXObject(L, CreateOleObject(lua_tostring(L, 1)));
+  Result := 1;
+end;
+
+function CreateVar(L : Plua_State) : Integer; cdecl;
+var
+  p: POleVariant;
+begin
+  lua_newtable(L);
+
+  lua_pushstring(L, FIELD_ID);
+  p:= lua_newuserdata(L, SizeOf(OleVariant));
+  VariantInit(TVarData(p^));
+  if lua_gettop(L) > 0 then begin
+    Lua2Var(L, p, 1, False);
+  end;
+  if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+  lua_pushstring(L, '__gc');
+  lua_pushcfunction(L, @gc);
+  lua_settable(L, -3);
+  lua_setmetatable(L, -2);
+  lua_settable(L, -3);
+
+  lua_newtable(L);
+  lua_pushstring(L, '__newindex');
+  lua_pushcfunction(L, @NewIndex);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__index');
+  lua_pushcfunction(L, @Index);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__call');
+  lua_pushcfunction(L, @iterator);
+  lua_settable(L, -3);
+  lua_setmetatable(L, -2);
+
   Result := 1;
 end;
 
