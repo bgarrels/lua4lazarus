@@ -168,46 +168,6 @@ begin
     param.cNamedArgs := 0;
     VariantInit(TVarData({%H-}ret));
 
-    if id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-     DISPATCH_PROPERTYGET or DISPATCH_METHOD, param, @ret, nil, nil) = 0 then begin
-      case VarType(ret) of
-        varNull: lua_pushnil(L);
-        varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
-        varSingle,varDouble: lua_pushnumber(L, ret);
-        varBoolean: lua_pushboolean(L, ret);
-        varDispatch: DoCreateActiveXObject(L, ret);
-        else begin
-          ws := ret;
-          s := UTF8Encode(ws);
-          lua_pushstring(L, PChar(s));
-        end;
-      end;
-
-      if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
-      lua_pushstring(L, '__call');
-      lua_pushcfunction(L, @call);
-      lua_settable(L, -3);
-      //lua_pushstring(L, '__index');
-      //lua_pushvalue(L, 1); // SuperClass
-      //lua_settable(L, -3);
-      lua_setmetatable(L, -2);
-    end else begin
-      // Return Table for function(method) call
-      lua_newtable(L);
-      lua_pushstring(L, FIELD_FN);
-      lua_pushstring(L, PChar(key));
-      lua_settable(L, -3);
-      lua_newtable(L);
-      lua_pushstring(L, '__call');
-      lua_pushcfunction(L, @call);
-      lua_settable(L, -3);
-      lua_pushstring(L, '__index');
-      lua_pushvalue(L, 1); // SuperClass
-      lua_settable(L, -3);
-      lua_setmetatable(L, -2);
-    end;
-
-    (*
     try1:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
                      DISPATCH_METHOD, param, @ret, nil, nil);
     if try1 <> 0 then begin
@@ -254,7 +214,6 @@ begin
         end;
       end;
     end;
-    *)
 
   end;
   Result := 1;
@@ -318,15 +277,15 @@ begin
   if TVarData(p^).vtype <> varDispatch then Exit;
   id:= IDispatch(TVarData(p^).vDispatch);
 
-  //if c - t = 0 then begin
-  //  // Load No Params Call Result
-  //  lua_pushstring(L, FIELD_NoParamFuncCallResult);
-  //  lua_rawget(L, 1);
-  //  p:= lua_touserdata(L, -1);
-  //  VariantInit(TVarData({%H-}ret));
-  //  ret:= p^;
-  //  lua_pop(L, 1);
-  //end else begin
+  if c - t = 0 then begin
+    // Load No Params Call Result
+    lua_pushstring(L, FIELD_NoParamFuncCallResult);
+    lua_rawget(L, 1);
+    p:= lua_touserdata(L, -1);
+    VariantInit(TVarData({%H-}ret));
+    ret:= p^;
+    lua_pop(L, 1);
+  end else begin
     lua_getfield(L, 1, FIELD_FN);
     func:= lua_tostring(L, -1);
     lua_pop(L, 1);
@@ -359,7 +318,7 @@ begin
     finally
       FreeMem(arglist);
     end;
-  //end;
+  end;
 
   case VarType(ret) of
     varNull: lua_pushnil(L);
