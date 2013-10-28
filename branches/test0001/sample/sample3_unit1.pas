@@ -67,7 +67,7 @@ begin
     lua_register(L, 'print', @print_func);
     lua_register(L, 'CreateActiveXObject', @CreateActiveXObject);
     lua_register(L, 'CreateInteger', @CreateInteger);
-    lua_register(L, 'CreateVar', @CreateVar);
+    lua_register(L, 'CreateRefType', @CreateRefType);
     l4l_PushLuaObject(TLuaMyUtilsObject.Create(L)); lua_setglobal(L, 'MyUtils');
     try
       s:= Memo1.Text;
