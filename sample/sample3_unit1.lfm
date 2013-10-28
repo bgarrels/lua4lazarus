@@ -24,7 +24,7 @@ object Form1: TForm1
       ''
       '  function createStruct(strTypeName)'
       '    local class = objCoreReflection.forName(strTypeName)'
-      '    local aStruct = CreateVar()'
+      '    local aStruct = CreateRefType()'
       '    class.createObject(aStruct)'
       '    return aStruct'
       '  end'

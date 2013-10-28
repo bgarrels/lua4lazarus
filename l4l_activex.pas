@@ -30,7 +30,7 @@ uses
   Classes, SysUtils, lua52;
 
 function CreateActiveXObject(L : Plua_State) : Integer; cdecl;
-function CreateVar(L : Plua_State) : Integer; cdecl;
+function CreateRefType(L : Plua_State) : Integer; cdecl;
 
 implementation
 uses
@@ -135,7 +135,6 @@ var
   di: TDispID;
   param: TDispParams;
   ret: OleVariant;
-  try1, try2: HResult;
 begin
   Result:= 0;
   lua_getmetatable(L, 1);
@@ -171,9 +170,8 @@ begin
     param.cNamedArgs := 0;
     VariantInit(TVarData({%H-}ret));
 
-    try1:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-     DISPATCH_PROPERTYGET, param, @ret, nil, nil);
-    if try1 = 0 then begin
+    if id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+     DISPATCH_PROPERTYGET, param, @ret, nil, nil) = 0 then begin
       // Return property value
       case VarType(ret) of
         varNull: lua_pushnil(L);
@@ -504,8 +502,8 @@ begin
   Result := 1;
 end;
 
-// Make variant type
-function CreateVar(L : Plua_State) : Integer; cdecl;
+// Make ref(ByRef) type
+function CreateRefType(L : Plua_State) : Integer; cdecl;
 var
   p: POleVariant;
   ParamCount: integer;
