@@ -13,7 +13,12 @@
 
     Version History:
       1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
+        - Add for LibreOffice
+        - Dynamic method call
+        - Needs pairs() for iterator
+        - etc.
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
+        - Initial public release
 }
 unit l4l_activex;
 
@@ -35,7 +40,6 @@ const
   FIELD_ID = '___IDispatch___';
   FIELD_FN = '___FuncName___';
   FIELD_IC = '___IteCount___';
-  FIELD_NoParamFuncCallResult = '___NoParamFuncCallResult___';
 
 function call(L : Plua_State) : Integer; cdecl; forward;
 procedure DoCreateActiveXObject(L : Plua_State; id: IDispatch); forward;
@@ -77,8 +81,8 @@ begin
         va^:= lua_tostring(L, index);
     end;
     LUA_TTABLE: begin
-      lua_pushstring(L, FIELD_ID);
-      lua_rawget(L, index);
+      lua_getmetatable(L, index);
+      lua_getfield(L, -1, FIELD_ID);
       if lua_isnil(L, -1) then begin
         obj:= l4l_toobject(L, index);
         if not Assigned(obj) then begin
@@ -118,7 +122,7 @@ begin
           TVarData(va^).vpointer:= p;
         //end;
       end;
-      lua_pop(L, 1);
+      lua_pop(L, 2);
     end;
   end{case};
 end;
@@ -136,9 +140,10 @@ var
   try1, try2: HResult;
 begin
   Result:= 0;
-  lua_getfield(L, 1, FIELD_ID);
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  lua_pop(L, 1);
+  lua_pop(L, 2);
   key := lua_tostring(L, 2);
 
   if TVarData(p^).vtype <> varDispatch then begin
@@ -169,37 +174,8 @@ begin
     VariantInit(TVarData({%H-}ret));
 
     try1:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-                     DISPATCH_METHOD, param, @ret, nil, nil);
-    if try1 <> 0 then begin
-      try2:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-                       DISPATCH_PROPERTYGET, param, @ret, nil, nil);
-    end;
-
-    if (try1 = 0) or (try2 <> 0) then begin
-      // Return Table for function(method) call
-      lua_newtable(L);
-      lua_pushstring(L, FIELD_FN);
-      lua_pushstring(L, PChar(key));
-      lua_settable(L, -3);
-      lua_newtable(L);
-      lua_pushstring(L, '__call');
-      lua_pushcfunction(L, @call);
-      lua_settable(L, -3);
-      lua_pushstring(L, '__index');
-      lua_pushvalue(L, 1); // SuperClass
-      lua_settable(L, -3);
-      lua_setmetatable(L, -2);
-
-      if try1 = 0 then begin
-        // Save No Params Call Result
-        lua_pushstring(L, FIELD_NoParamFuncCallResult);
-        p:= lua_newuserdata(L, SizeOf(OleVariant));
-        VariantInit(TVarData(p^));
-        p^:= ret;
-        lua_rawset(L, -3);
-      end;
-
-    end else begin
+     DISPATCH_PROPERTYGET, param, @ret, nil, nil);
+    if try1 = 0 then begin
       // Return property value
       case VarType(ret) of
         varNull: lua_pushnil(L);
@@ -213,8 +189,30 @@ begin
           lua_pushstring(L, PChar(s));
         end;
       end;
+    end else begin
+      // Return Table for function(method) call
+      lua_newtable(L);
     end;
 
+    if VarType(ret) <> varDispatch then begin
+      // Change Metatable for function call
+      if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+      lua_pushstring(L, FIELD_ID);
+      p:= lua_newuserdata(L, SizeOf(OleVariant));
+      VariantInit(TVarData(p^));
+      p^:= id;
+      lua_rawset(L, -3);
+      lua_pushstring(L, FIELD_FN);
+      lua_pushstring(L, PChar(key));
+      lua_rawset(L, -3);
+      lua_pushstring(L, '__call');
+      lua_pushcfunction(L, @call);
+      lua_rawset(L, -3);
+      //lua_pushstring(L, '__index');
+      //lua_pushvalue(L, 1); // SuperClass
+      //lua_rawset(L, -3);
+      lua_setmetatable(L, -2);
+    end;
   end;
   Result := 1;
 end;
@@ -230,9 +228,10 @@ var
   v: OleVariant;
 begin
   Result:=0;
-  lua_getfield(L, 1, FIELD_ID);
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  lua_pop(L, 1);
+  lua_pop(L, 2);
   key := lua_tostring(L, 2);
 
   if TVarData(p^).vtype <> varDispatch then begin
@@ -271,53 +270,45 @@ begin
   Result:= 0;
   c:= lua_gettop(L);
   t:= 1; // ToDo: const?
-  lua_getfield(L, 1, FIELD_ID);
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  lua_pop(L, 1);
+  lua_pop(L, 2);
   if TVarData(p^).vtype <> varDispatch then Exit;
   id:= IDispatch(TVarData(p^).vDispatch);
 
-  if c - t = 0 then begin
-    // Load No Params Call Result
-    lua_pushstring(L, FIELD_NoParamFuncCallResult);
-    lua_rawget(L, 1);
-    p:= lua_touserdata(L, -1);
-    VariantInit(TVarData({%H-}ret));
-    ret:= p^;
-    lua_pop(L, 1);
-  end else begin
-    lua_getfield(L, 1, FIELD_FN);
-    func:= lua_tostring(L, -1);
-    lua_pop(L, 1);
-    ws:= UTF8Decode(func);
-    ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
-    GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
-    try
-      // 逆順で
-      pp := arglist;
-      for i := c downto t+1 do begin
-        Lua2Var(L, POleVariant(pp), i);
-        Inc(pp);
-      end;
-      param.cArgs := c - t;
-  {$IFDEF VER2_4}
-      param.rgvarg := arglist;
-  {$ELSE}
-      param.rgvarg := PVariantArgList(arglist);
-  {$ENDIF}
-      param.rgdispidNamedArgs := nil;
-      param.cNamedArgs := 0;
-      VariantInit(TVarData({%H-}ret));
-
-      ChkErr(L, id.Invoke(
-       di,
-       GUID_NULL,
-       GetUserDefaultLCID,
-       DISPATCH_PROPERTYGET or DISPATCH_METHOD,
-       param, @ret, nil, nil), func);
-    finally
-      FreeMem(arglist);
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_FN);
+  func:= lua_tostring(L, -1);
+  lua_pop(L, 2);
+  ws:= UTF8Decode(func);
+  ChkErr(L, id.GetIDsOfNames(GUID_NULL, @ws, 1, GetUserDefaultLCID, @di), func);
+  GetMem(arglist, SizeOf({$IFDEF VER2_4}VariantArg{$ELSE}TVariantArg{$ENDIF}) * (c-t));
+  try
+    // 逆順で
+    pp := arglist;
+    for i := c downto t+1 do begin
+      Lua2Var(L, POleVariant(pp), i);
+      Inc(pp);
     end;
+    param.cArgs := c - t;
+{$IFDEF VER2_4}
+    param.rgvarg := arglist;
+{$ELSE}
+    param.rgvarg := PVariantArgList(arglist);
+{$ENDIF}
+    param.rgdispidNamedArgs := nil;
+    param.cNamedArgs := 0;
+    VariantInit(TVarData({%H-}ret));
+
+    ChkErr(L, id.Invoke(
+     di,
+     GUID_NULL,
+     GetUserDefaultLCID,
+     DISPATCH_PROPERTYGET or DISPATCH_METHOD,
+     param, @ret, nil, nil), func);
+  finally
+    FreeMem(arglist);
   end;
 
   case VarType(ret) of
@@ -347,9 +338,10 @@ var
   v, ret: OleVariant;
 begin
   Result:= 0;
-  lua_getfield(L, 1, FIELD_ID);
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_ID);
   p:= lua_touserdata(L, -1);
-  lua_pop(L, 1);
+  lua_pop(L, 2);
 
   if TVarData(p^).vtype <> varDispatch then Exit;
 
@@ -403,6 +395,14 @@ begin
   Result := 1;
 end;
 
+function pairs(L : Plua_State) : Integer; cdecl;
+begin
+  lua_pushcfunction(L, @iterator); // f
+  lua_pushvalue(L, 1); // t
+  lua_pushnil(L); // s
+  Result:= 3;
+end;
+
 function gc(L : Plua_State) : Integer; cdecl;
 var
   p: POleVariant;
@@ -434,6 +434,7 @@ begin
   id._AddRef;
   lua_newtable(L); //t:= lua_gettop(L);
 
+  lua_newtable(L);
   lua_pushstring(L, FIELD_ID);
   p:= lua_newuserdata(L, SizeOf(OleVariant));
   VariantInit(TVarData(p^));
@@ -486,7 +487,6 @@ begin
     ChkErr(L, hr, 'CreateActiveXObject');
   end;
   *)
-  lua_newtable(L);
   lua_pushstring(L, '__newindex');
   lua_pushcfunction(L, @NewIndex);
   lua_settable(L, -3);
@@ -494,7 +494,13 @@ begin
   lua_pushcfunction(L, @Index);
   lua_settable(L, -3);
   lua_pushstring(L, '__call');
-  lua_pushcfunction(L, @iterator);
+  lua_pushcfunction(L, @call);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__pairs');
+  lua_pushcfunction(L, @pairs);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__ipairs');
+  lua_pushcfunction(L, @pairs);
   lua_settable(L, -3);
   lua_setmetatable(L, -2);
 end;
@@ -508,23 +514,25 @@ end;
 function CreateVar(L : Plua_State) : Integer; cdecl;
 var
   p: POleVariant;
+  ParamCount: integer;
 begin
+  ParamCount:= lua_gettop(L);
   lua_newtable(L);
 
+  lua_newtable(L);
   lua_pushstring(L, FIELD_ID);
   p:= lua_newuserdata(L, SizeOf(OleVariant));
   VariantInit(TVarData(p^));
-  if lua_gettop(L) > 0 then begin
+  if ParamCount > 0 then begin
     Lua2Var(L, p, 1, False);
   end;
-  if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
-  lua_pushstring(L, '__gc');
-  lua_pushcfunction(L, @gc);
-  lua_settable(L, -3);
-  lua_setmetatable(L, -2);
+  //if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+  //lua_pushstring(L, '__gc');
+  //lua_pushcfunction(L, @gc);
+  //lua_settable(L, -3);
+  //lua_setmetatable(L, -2);
   lua_settable(L, -3);
 
-  lua_newtable(L);
   lua_pushstring(L, '__newindex');
   lua_pushcfunction(L, @NewIndex);
   lua_settable(L, -3);
@@ -532,7 +540,13 @@ begin
   lua_pushcfunction(L, @Index);
   lua_settable(L, -3);
   lua_pushstring(L, '__call');
-  lua_pushcfunction(L, @iterator);
+  lua_pushcfunction(L, @call);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__pairs');
+  lua_pushcfunction(L, @pairs);
+  lua_settable(L, -3);
+  lua_pushstring(L, '__ipairs');
+  lua_pushcfunction(L, @pairs);
   lua_settable(L, -3);
   lua_setmetatable(L, -2);
 
