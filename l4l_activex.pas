@@ -40,6 +40,7 @@ const
   FIELD_ID = '___IDispatch___';
   FIELD_FN = '___FuncName___';
   FIELD_IC = '___IteCount___';
+  FIELD_ID_PARENT = '___IDispatchParent___';
 
 function call(L : Plua_State) : Integer; cdecl; forward;
 procedure DoCreateActiveXObject(L : Plua_State; id: IDispatch); forward;
@@ -54,6 +55,7 @@ begin
       DISP_E_TYPEMISMATCH: s:= 'Type Mismatch';
       DISP_E_UNKNOWNNAME: s:= 'Unknown Name';
       DISP_E_BADPARAMCOUNT: s:= 'Bad Param Count';
+      E_INVALIDARG: s:= 'Invaid Arg'
       else s:= 'ActiveX Error';
     end;
     s:= s + Format('(%x)', [Val]);
@@ -115,12 +117,8 @@ begin
         end;
       end else begin
         p:= lua_touserdata(L, -1);
-        //if TVarData(p^).vtype = varDispatch then begin
-        //  va^:= p^;
-        //end else begin
-          TVarData(va^).vtype:= varVariant or varByRef;
-          TVarData(va^).vpointer:= p;
-        //end;
+        TVarData(va^).vtype:= varVariant or varByRef;
+        TVarData(va^).vpointer:= p;
       end;
       lua_pop(L, 2);
     end;
@@ -194,25 +192,20 @@ begin
       lua_newtable(L);
     end;
 
-    if VarType(ret) <> varDispatch then begin
-      // Change Metatable for function call
-      if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
-      lua_pushstring(L, FIELD_ID);
-      p:= lua_newuserdata(L, SizeOf(OleVariant));
-      VariantInit(TVarData(p^));
-      p^:= id;
-      lua_rawset(L, -3);
-      lua_pushstring(L, FIELD_FN);
-      lua_pushstring(L, PChar(key));
-      lua_rawset(L, -3);
-      lua_pushstring(L, '__call');
-      lua_pushcfunction(L, @call);
-      lua_rawset(L, -3);
-      //lua_pushstring(L, '__index');
-      //lua_pushvalue(L, 1); // SuperClass
-      //lua_rawset(L, -3);
-      lua_setmetatable(L, -2);
-    end;
+    // Change Metatable for function call
+    if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+    lua_pushstring(L, FIELD_FN);
+    lua_pushstring(L, PChar(key));
+    lua_rawset(L, -3);
+    lua_pushstring(L, FIELD_ID_PARENT);
+    p:= lua_newuserdata(L, SizeOf(OleVariant));
+    VariantInit(TVarData(p^));
+    p^:= id;
+    lua_rawset(L, -3);
+    lua_pushstring(L, '__call');
+    lua_pushcfunction(L, @call);
+    lua_rawset(L, -3);
+    lua_setmetatable(L, -2);
   end;
   Result := 1;
 end;
@@ -271,7 +264,7 @@ begin
   c:= lua_gettop(L);
   t:= 1; // ToDo: const?
   lua_getmetatable(L, 1);
-  lua_getfield(L, -1, FIELD_ID);
+  lua_getfield(L, -1, FIELD_ID_PARENT);
   p:= lua_touserdata(L, -1);
   lua_pop(L, 2);
   if TVarData(p^).vtype <> varDispatch then Exit;
@@ -493,9 +486,9 @@ begin
   lua_pushstring(L, '__index');
   lua_pushcfunction(L, @Index);
   lua_settable(L, -3);
-  lua_pushstring(L, '__call');
-  lua_pushcfunction(L, @call);
-  lua_settable(L, -3);
+  //lua_pushstring(L, '__call');
+  //lua_pushcfunction(L, @call);
+  //lua_settable(L, -3);
   lua_pushstring(L, '__pairs');
   lua_pushcfunction(L, @pairs);
   lua_settable(L, -3);
@@ -511,6 +504,7 @@ begin
   Result := 1;
 end;
 
+// Make variant type
 function CreateVar(L : Plua_State) : Integer; cdecl;
 var
   p: POleVariant;
@@ -539,9 +533,9 @@ begin
   lua_pushstring(L, '__index');
   lua_pushcfunction(L, @Index);
   lua_settable(L, -3);
-  lua_pushstring(L, '__call');
-  lua_pushcfunction(L, @call);
-  lua_settable(L, -3);
+  //lua_pushstring(L, '__call');
+  //lua_pushcfunction(L, @call);
+  //lua_settable(L, -3);
   lua_pushstring(L, '__pairs');
   lua_pushcfunction(L, @pairs);
   lua_settable(L, -3);

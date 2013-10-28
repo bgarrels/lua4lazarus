@@ -21,7 +21,7 @@ object Form1: TForm1
       'while (ie.readyState ~= 4) do end'
       'while (ie.document.readystate ~= "complete") do end'
       'tags = ie.document.getElementsByTagName("a")'
-      'for t in tags do'
+      'for t in pairs(tags) do'
       '  print(t.innertext .. " = " .. t.HREF)'
       'end'
     )
