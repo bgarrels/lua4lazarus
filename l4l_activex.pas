@@ -143,7 +143,7 @@ begin
   lua_pushstring(L, key);
   lua_rawget(L, 1);
   if not lua_isnil(L, -1) then begin
-    // property or method name is case insesitive
+    // for method name is case insesitive
     Result:= 1;
     Exit;
   end;
