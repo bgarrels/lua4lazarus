@@ -24,6 +24,7 @@ object Form1: TForm1
       'for t in pairs(tags) do'
       '  print(t.innertext .. " = " .. t.HREF)'
       'end'
+      'ie.Quit()'
     )
     ScrollBars = ssAutoBoth
     TabOrder = 0

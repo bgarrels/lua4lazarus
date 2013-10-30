@@ -135,16 +135,27 @@ var
   di: TDispID;
   param: TDispParams;
   ret: OleVariant;
+  hr: HResult;
 begin
   Result:= 0;
+
+  key := LowerCase(lua_tostring(L, 2));
+  lua_pushstring(L, key);
+  lua_rawget(L, 1);
+  if not lua_isnil(L, -1) then begin
+    // property or method name is case insesitive
+    Result:= 1;
+    Exit;
+  end;
+  lua_pop(L, 1);
+
   lua_getmetatable(L, 1);
   lua_getfield(L, -1, FIELD_ID);
   p:= lua_touserdata(L, -1);
   lua_pop(L, 2);
-  key := lua_tostring(L, 2);
 
   if TVarData(p^).vtype <> varDispatch then begin
-    key:= LowerCase(key);
+    //key:= LowerCase(key);
     if key = 'value' then begin
       case VarType(p^) of
         varNull: lua_pushnil(L);
@@ -170,8 +181,9 @@ begin
     param.cNamedArgs := 0;
     VariantInit(TVarData({%H-}ret));
 
-    if id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
-     DISPATCH_PROPERTYGET, param, @ret, nil, nil) = 0 then begin
+    hr:= id.Invoke(di, GUID_NULL, GetUserDefaultLCID,
+                   DISPATCH_PROPERTYGET, param, @ret, nil, nil);
+    if hr = 0 then begin
       // Return property value
       case VarType(ret) of
         varNull: lua_pushnil(L);
@@ -204,6 +216,13 @@ begin
     lua_pushcfunction(L, @call);
     lua_rawset(L, -3);
     lua_setmetatable(L, -2);
+
+    if hr = DISP_E_MEMBERNOTFOUND then begin
+      // Key is method, not property
+      lua_pushstring(L, PChar(key));
+      lua_pushvalue(L, -2);
+      lua_rawset(L, 1);
+    end;
   end;
   Result := 1;
 end;
