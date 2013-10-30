@@ -219,7 +219,7 @@ begin
 
     if hr = DISP_E_MEMBERNOTFOUND then begin
       // Key is method, not property
-      lua_pushstring(L, PChar(key));
+      lua_pushstring(L, PChar(key)); // key is Lower Case
       lua_pushvalue(L, -2);
       lua_rawset(L, 1);
     end;
