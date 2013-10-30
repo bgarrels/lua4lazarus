@@ -14,7 +14,7 @@
     Version History:
       1.52.0 by Malcome Japan. (with Lazarus 1.3 and FPC 2.6.2)
         - Add for LibreOffice
-        - Dynamic method call
+        - All dynamic method call
         - Needs pairs() for iterator
         - etc.
       1.0.0 by Malcome Japan. (with Lazarus 0.9.29 and FPC 2.4.1)
