@@ -39,7 +39,6 @@ uses
 const
   FIELD_ID = '___IDispatch___';
   FIELD_FN = '___FuncName___';
-  FIELD_IC = '___IteCount___';
   FIELD_ID_PARENT = '___IDispatchParent___';
 
 function call(L : Plua_State) : Integer; cdecl; forward;
@@ -337,6 +336,7 @@ begin
   Result := 1;
 end;
 
+(*
 function iterator(L : Plua_State) : Integer; cdecl;
 var
   i: integer;
@@ -408,6 +408,77 @@ end;
 function pairs(L : Plua_State) : Integer; cdecl;
 begin
   lua_pushcfunction(L, @iterator); // f
+  lua_pushvalue(L, 1); // t
+  lua_pushnil(L); // s
+  Result:= 3;
+end;
+*)
+
+function iterator(L : Plua_State) : Integer; cdecl;
+var
+  i: integer;
+  p: POleVariant;
+  id: IDispatch;
+  s: string;
+  ws: WideString;
+  param: TDispParams;
+  v, ret: OleVariant;
+begin
+  Result:= 0;
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, FIELD_ID);
+  p:= lua_touserdata(L, -1);
+  lua_pop(L, 2);
+
+  if TVarData(p^).vtype <> varDispatch then Exit;
+
+  id:= IDispatch(TVarData(p^).vDispatch);
+  i:= lua_tointeger(L, lua_upvalueindex(1));
+  lua_pushinteger(L, i+1);
+  lua_replace(L, lua_upvalueindex(1));
+
+  VariantInit(TVarData({%H-}v));
+  v := i;
+  param.cArgs := 1;
+  param.rgvarg := @v;
+  param.rgdispidNamedArgs := nil;
+  param.cNamedArgs := 0;
+  VariantInit(TVarData({%H-}ret));
+
+  if id.Invoke(
+   DISPID_VALUE,
+   GUID_NULL,
+   GetUserDefaultLCID,
+   DISPATCH_PROPERTYGET or DISPATCH_METHOD,
+   param, @ret, nil, nil) = 0 then begin
+    case VarType(ret) of
+      varNull: lua_pushnil(L);
+      varSmallint,varInteger,varByte: lua_pushinteger(L, ret);
+      varSingle,varDouble: lua_pushnumber(L, ret);
+      varBoolean: lua_pushboolean(L, ret);
+      varDispatch: begin
+        if TVarData(ret).vdispatch <> nil then begin
+          DoCreateActiveXObject(L, ret);
+        end else begin
+          lua_pushnil(L);
+        end;
+      end;
+      else begin
+        ws := ret;
+        s := UTF8Encode(ws);
+        lua_pushstring(L, PChar(s));
+      end;
+    end;
+  end else begin
+    lua_pushnil(L);
+  end;
+  Result := 1;
+end;
+
+function pairs(L : Plua_State) : Integer; cdecl;
+begin
+  lua_pushinteger(L, 0); // upvalue for loop counter
+  lua_pushcclosure(L, @iterator, 1); // f
   lua_pushvalue(L, 1); // t
   lua_pushnil(L); // s
   Result:= 3;
