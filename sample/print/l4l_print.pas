@@ -80,7 +80,9 @@ type
     function GetBrushObject: TLuaBrushObject;
     function GetFontObject: TLuaFontObject;
     function GetPageHeight: integer;
+    function GetPageLeft: integer;
     function GetPageNumber: integer;
+    function GetPageTop: integer;
     function GetPageWidth: integer;
     function GetPenObject: TLuaPenObject;
   protected
@@ -100,9 +102,13 @@ type
     function l4l_DrawImage: integer;
     function l4l_DrawPDF: integer;
     function l4l_NewPage: integer;
+    function l4l_DP2LP: integer;
+    function l4l_LP2DP: integer;
     property l4l_pageWidth: integer read GetPageWidth;
     property l4l_pageHeight: integer read GetPageHeight;
     property l4l_pageNumber: integer read GetPageNumber;
+    property l4l_pageLeft: integer read GetPageLeft;
+    property l4l_pageTop: integer read GetPageTop;
     property l4l_units: char read FUnits write FUnits;
     property l4l_Font: TLuaFontObject read GetFontObject;
     property l4l_Pen: TLuaPenObject read GetPenObject;
@@ -116,11 +122,13 @@ type
     function GetColor: string;
     function GetHeight: integer;
     function GetName: string;
+    function GetOrientation: integer;
     function GetSize: integer;
     function GetStyle: string;
     procedure SetColor(const AValue: string);
     procedure SetHeight(const AValue: integer);
     procedure SetName(const AValue: string);
+    procedure SetOrientation(AValue: integer);
     procedure SetSize(const AValue: integer);
     procedure SetStyle(const AValue: string);
   protected
@@ -134,6 +142,7 @@ type
     property l4l_Size: integer read GetSize write SetSize;
     property l4l_Height: integer read GetHeight write SetHeight; // Only "DP".
     property l4l_Style: string read GetStyle write SetStyle;
+    property l4l_Orientation: integer read GetOrientation write SetOrientation;
   end;
 
   { TLuaPenObject }
@@ -235,6 +244,7 @@ type
     function l4l_font_size: integer;
     function l4l_font_height: integer;
     function l4l_font_style: integer;
+    function l4l_font_orientation: integer;
     function l4l_pen_color: integer;
     function l4l_pen_style: integer;
     function l4l_pen_joinstyle: integer;
@@ -540,6 +550,16 @@ begin
   Result := DP2LP(LuaPrint.PageSize.cy);
 end;
 
+function TLuaPrintObject.GetPageLeft: integer;
+begin
+  Result := DP2LP(LuaPrint.FRealMargin.Left);
+end;
+
+function TLuaPrintObject.GetPageTop: integer;
+begin
+  Result := DP2LP(LuaPrint.FRealMargin.Top);
+end;
+
 function TLuaPrintObject.GetPageNumber: integer;
 begin
   Result := LuaPrint.PageCount;
@@ -688,6 +708,18 @@ begin
   Result := 0;
 end;
 
+function TLuaPrintObject.l4l_DP2LP: integer;
+begin
+  lua_pushinteger(LS, DP2LP(lua_tointeger(LS, 1)));
+  Result := 1;
+end;
+
+function TLuaPrintObject.l4l_LP2DP: integer;
+begin
+  lua_pushinteger(LS, LP2DP(lua_tointeger(LS, 1)));
+  Result := 1;
+end;
+
 { TLuaFontObject }
 
 constructor TLuaFontObject.Create(L: Plua_State; aLPO: TLuaPrintObject);
@@ -714,6 +746,11 @@ end;
 function TLuaFontObject.GetName: string;
 begin
   Result := LPO.LuaPrint.FCanvas.Font.Name;
+end;
+
+function TLuaFontObject.GetOrientation: integer;
+begin
+  Result := LPO.LuaPrint.FCanvas.Font.Orientation;
 end;
 
 function TLuaFontObject.GetSize: integer;
@@ -755,6 +792,13 @@ begin
   LPO.LuaPrint.FCanvas.Font.Name := AValue;
   LPO.LuaPrint.AddOrder(
    Format(PRUN_NAME + '.font_name(%s)', [str_param(AValue)]));
+end;
+
+procedure TLuaFontObject.SetOrientation(AValue: integer);
+begin
+  LPO.LuaPrint.FCanvas.Font.Orientation := AValue;
+  LPO.LuaPrint.AddOrder(
+   Format(PRUN_NAME + '.font_orientation(%d)', [AValue]));
 end;
 
 procedure TLuaFontObject.SetSize(const AValue: integer);
@@ -1183,7 +1227,7 @@ begin
   Result := 0;
 end;
 
-function TLuaPrintRunObject.l4l_PolyFill: integer;
+function TLuaPrintRunObject.l4l_Polyfill: integer;
 {$IFDEF USE_AGG}
 {$ELSE}
 var
@@ -1288,6 +1332,12 @@ end;
 function TLuaPrintRunObject.l4l_font_style: integer;
 begin
   LuaPrint.FCanvas.Font.Style := TFontStyles(lua_tointeger(LS, 1));
+  Result := 0;
+end;
+
+function TLuaPrintRunObject.l4l_font_orientation: integer;
+begin
+  LuaPrint.FCanvas.Font.Orientation := lua_tointeger(LS, 1);
   Result := 0;
 end;
 
