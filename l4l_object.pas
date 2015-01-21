@@ -106,7 +106,7 @@ begin
     lua_getfield(L, 1, PChar(LowerCase(key)));
   end else begin
     try
-      pi := FindPropInfo(obj, PROP_HEAD + key);
+      pi := FindPropInfo(obj, PROP_HEAD + LowerCase(key));
     except
       luaL_error(L, 'Unknown property: "%s".', PChar(key));
     end;
@@ -154,7 +154,7 @@ begin
   obj:= TLuaObject(p^);
   key := lua_tostring(L, 2);
   try
-    pi := FindPropInfo(obj, PROP_HEAD + key);
+    pi := FindPropInfo(obj, PROP_HEAD + LowerCase(key));
   except
     luaL_error(L, 'Unknown property: "%s".', PChar(key));
   end;
