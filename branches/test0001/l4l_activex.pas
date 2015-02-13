@@ -76,6 +76,7 @@ type
                     {%H-}ArgErr: Pointer): HRESULT; stdcall;
   end;
 
+function gc_ID(L : Plua_State) : Integer; cdecl; forward;
 function call(L : Plua_State) : Integer; cdecl; forward;
 procedure DoCreateActiveXObject(L : Plua_State; id: IDispatch); forward;
 
@@ -239,12 +240,19 @@ begin
     // Change Metatable for function call
     if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
     lua_pushstring(L, FIELD_FN);
-    lua_pushstring(L, PChar(key));
+    lua_pushstring(L, key);
     lua_rawset(L, -3);
+
     lua_pushstring(L, FIELD_ID_PARENT);
     p:= lua_newuserdata(L, SizeOf(OleVariant));
     VariantInit(TVarData(p^));
     p^:= id;
+    if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
+    lua_pushstring(L, '__gc');
+    lua_pushcfunction(L, @gc_ID);
+    lua_settable(L, -3);
+    lua_setmetatable(L, -2);
+
     lua_rawset(L, -3);
     lua_pushstring(L, '__call');
     lua_pushcfunction(L, @call);
@@ -522,7 +530,7 @@ begin
   Result:= 3;
 end;
 
-function gc(L : Plua_State) : Integer; cdecl;
+function gc_ID(L : Plua_State) : Integer; cdecl;
 var
   p: POleVariant;
 begin
@@ -566,7 +574,7 @@ begin
   p^:= id;
   if lua_getmetatable(L, -1) = 0 then lua_newtable(L);
   lua_pushstring(L, '__gc');
-  lua_pushcfunction(L, @gc);
+  lua_pushcfunction(L, @gc_ID);
   lua_settable(L, -3);
   lua_setmetatable(L, -2);
   lua_settable(L, -3);
